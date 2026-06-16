@@ -266,11 +266,11 @@ async def websocket_endpoint(websocket: WebSocket):
             
             elif action == "prossima_giornata":
                 if stato_gioco["fase"] == "ATTESA_GIORNATA":
-                stato_gioco["fase"] = "MERCATO"
-                stato_gioco["giornata"] += 1
-                stato_gioco["timer"] = 60  # Rimette il timer a 60 sec per il mercato
-                stato_gioco["status_log"] = f"Iniziata Giornata {stato_gioco['giornata']}. Prepara la formazione."
-                await aggiorna_tutti_i_client()
+                    stato_gioco["fase"] = "MERCATO"
+                    stato_gioco["giornata"] += 1
+                    stato_gioco["timer"] = 60  # Rimette il timer a 60 sec per il mercato
+                    stato_gioco["status_log"] = f"Iniziata Giornata {stato_gioco['giornata']}. Prepara la formazione."
+                    await aggiorna_tutti_i_client()
                 
     except WebSocketDisconnect:
         if websocket in connessioni_attive: del connessioni_attive[websocket]
