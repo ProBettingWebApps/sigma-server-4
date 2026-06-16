@@ -385,18 +385,18 @@ async def game_loop():
                             g["valore"] = g.get("valore_base", 50000)
                             g["trend_valore"] = 0
                     else:
-                        stato_gioco["status_log"] = "Turno Concluso! Statistiche aggiornate."
-                        stato_gioco["fase"] = "ATTESA_GIORNATA"
+                    stato_gioco["status_log"] = "Turno Concluso! Statistiche aggiornate."
+                    stato_gioco["fase"] = "ATTESA_GIORNATA"
 
             salva_dati()
             await asyncio.sleep(0.5)
             await aggiorna_tutti_i_client()
-            else:
-                if stato_gioco["fase"] == "MERCATO":
-                    msg = {"type": "tick", "timer": stato_gioco["timer"], "mercato_aperto": True, "stato_str": "MERCATO APERTO"}
-                    for ws in list(connessioni_attive.keys()):
-                        try: await ws.send_json(msg)
-                        except: pass
+        else:
+            if stato_gioco["fase"] == "MERCATO":
+                msg = {"type": "tick", "timer": stato_gioco["timer"], "mercato_aperto": True, "stato_str": "MERCATO APERTO"}
+                for ws in list(connessioni_attive.keys()):
+                    try: await ws.send_json(msg)
+                    except: pass
         except Exception as e:
             print(f"ERRORE CRITICO MOTORE SALVATO: {e}")
             await asyncio.sleep(2)
