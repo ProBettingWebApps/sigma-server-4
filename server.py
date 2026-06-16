@@ -384,11 +384,11 @@ async def game_loop():
                         for g in database_globale:
                             g["valore"] = g.get("valore_base", 50000)
                             g["trend_valore"] = 0
-                    else:
-                    stato_gioco["status_log"] = "Turno Concluso! Statistiche aggiornate."
-                    stato_gioco["fase"] = "ATTESA_GIORNATA"
+                    
+                            stato_gioco["status_log"] = "Turno Concluso! Statistiche aggiornate."
+                            stato_gioco["fase"] = "ATTESA_GIORNATA"
 
-            salva_dati()
+                            salva_dati()
             await asyncio.sleep(0.5)
             await aggiorna_tutti_i_client()
         else:
