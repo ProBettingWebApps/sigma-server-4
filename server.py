@@ -261,14 +261,23 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(costruisci_pacchetto_personale(uname))
             
             elif action == "admin_skip":
-                stato_gioco["timer"] = 1
+                # Lo skip interviene solo se siamo alla Giornata 1
+                if stato_gioco["giornata"] == 1 and stato_gioco["fase"] == "MERCATO":
+                    stato_gioco["timer"] = 1
                 
-            
             elif action == "prossima_giornata":
                 if stato_gioco["fase"] == "ATTESA_GIORNATA":
                     stato_gioco["fase"] = "MERCATO"
-                    stato_gioco["giornata"] += 1
-                    stato_gioco["timer"] = 60  # Rimette il timer a 60 sec per il mercato
+                    # La giornata è già scattata a fine simulazione, quindi qui NON la aumentiamo,
+                    # ci limitiamo a caricare il timer corretto:
+                    
+                    if stato_gioco["giornata"] == 1:
+                        stato_gioco["timer"] = 600  # 10 minuti per la primissima asta 
+                    elif stato_gioco["giornata"] in [6, 12, 18]:
+                        stato_gioco["timer"] = 180  # 3 minuti 
+                    else:
+                        stato_gioco["timer"] = 60   # 1 minuto
+                        
                     stato_gioco["status_log"] = f"Iniziata Giornata {stato_gioco['giornata']}. Prepara la formazione."
                     await aggiorna_tutti_i_client()
                 
@@ -342,9 +351,10 @@ async def game_loop():
                         g["trend_valore"] = nuovo_valore - vecchio_valore
                         g["valore"] = nuovo_valore
                     
+                    # === FINE SIMULAZIONE: AGGIORNIAMO LA GIORNATA E ATTENDIAMO IL CONTINUA ===
                     stato_gioco["fase"] = "ATTESA_GIORNATA"
-                    stato_gioco["timer"] = 600
                     stato_gioco["giornata"] += 1
+                    stato_gioco["timer"] = 0 # Aspetta il bottone "Continua la Partita"
                     
                     if stato_gioco["giornata"] > 24:
                         stato_gioco["status_log"] = "Campionato Terminato! WIPE-OUT in corso..."
