@@ -263,6 +263,15 @@ async def websocket_endpoint(websocket: WebSocket):
             elif action == "admin_skip":
                 stato_gioco["timer"] = 3
                 
+            
+            elif action == "prossima_giornata":
+            if stato_gioco["fase"] == "ATTESA_GIORNATA":
+                stato_gioco["fase"] = "MERCATO"
+                stato_gioco["giornata"] += 1
+                stato_gioco["timer"] = 60  # Rimette il timer a 60 sec per il mercato
+                stato_gioco["status_log"] = f"Iniziata Giornata {stato_gioco['giornata']}. Prepara la formazione."
+                await aggiorna_tutti_i_client()
+                
     except WebSocketDisconnect:
         if websocket in connessioni_attive: del connessioni_attive[websocket]
 
@@ -333,7 +342,7 @@ async def game_loop():
                         g["trend_valore"] = nuovo_valore - vecchio_valore
                         g["valore"] = nuovo_valore
                     
-                    stato_gioco["fase"] = "MERCATO"
+                    stato_gioco["fase"] = "ATTESA_GIORNATA"
                     stato_gioco["timer"] = 600
                     stato_gioco["giornata"] += 1
                     
@@ -376,11 +385,12 @@ async def game_loop():
                             g["valore"] = g.get("valore_base", 50000)
                             g["trend_valore"] = 0
                     else:
-                        stato_gioco["status_log"] = "Turno Concluso! Statistiche aggiornate."
+            stato_gioco["status_log"] = "Turno Concluso! Statistiche aggiornate."
+            stato_gioco["fase"] = "ATTESA_GIORNATA"
 
-                    salva_dati()
-                    await asyncio.sleep(0.5) 
-                    await aggiorna_tutti_i_client()
+            salva_dati()
+            await asyncio.sleep(0.5)
+            await aggiorna_tutti_i_client()
             else:
                 if stato_gioco["fase"] == "MERCATO":
                     msg = {"type": "tick", "timer": stato_gioco["timer"], "mercato_aperto": True, "stato_str": "MERCATO APERTO"}
