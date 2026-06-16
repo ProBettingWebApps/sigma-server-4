@@ -261,7 +261,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(costruisci_pacchetto_personale(uname))
             
             elif action == "admin_skip":
-                stato_gioco["timer"] = 3
+                stato_gioco["timer"] = 1
                 
             
             elif action == "prossima_giornata":
