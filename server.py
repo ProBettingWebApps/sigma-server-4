@@ -265,7 +265,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 
             
             elif action == "prossima_giornata":
-            if stato_gioco["fase"] == "ATTESA_GIORNATA":
+                if stato_gioco["fase"] == "ATTESA_GIORNATA":
                 stato_gioco["fase"] = "MERCATO"
                 stato_gioco["giornata"] += 1
                 stato_gioco["timer"] = 60  # Rimette il timer a 60 sec per il mercato
