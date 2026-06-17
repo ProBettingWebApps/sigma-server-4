@@ -290,13 +290,18 @@ async def websocket_endpoint(websocket: WebSocket):
                     await aggiorna_tutti_i_client()
 
             elif action == "scegli_sponsor":
-                sponsor_scelto = data.get("sponsor", "Nessuno")
-                if sponsor_scelto in ["Hunterbet Tech", "Sigma Main", "Profezia"] and my_data.get("sponsor") == "Nessuno":
-                    my_data["sponsor"] = sponsor_scelto
-                    if sponsor_scelto == "Hunterbet Tech": my_data["budget"] += 50000
-                    elif sponsor_scelto == "Sigma Main": my_data["budget"] += 100000
-                    elif sponsor_scelto == "Profezia": my_data["budget"] += 30000
-                    stato_gioco["status_log"] = f"{uname} ha siglato un accordo ufficiale con {sponsor_scelto}!"
+                sponsor_scelto = data.get("sponsor", "Sponsor Standard")
+                if my_data.get("sponsor") == "Nessuno":
+                    my_data["sponsor"] = sponsor_scelto  # Salva forzatamente per uccidere il popup
+                    
+                    if "Sigma" in sponsor_scelto: 
+                        my_data["budget"] += 100000
+                    elif "Profezia" in sponsor_scelto: 
+                        my_data["budget"] += 30000
+                    else: 
+                        my_data["budget"] += 50000
+                        
+                    stato_gioco["status_log"] = f"{uname} ha siglato un accordo con {sponsor_scelto}!"
                     await aggiorna_tutti_i_client()
                     
             elif action == "scegli_talento":
