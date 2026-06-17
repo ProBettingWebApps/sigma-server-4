@@ -289,7 +289,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     stato_gioco["status_log"] = f"{uname} ha acquistato {giocatori[0]['nome']}"
                     await aggiorna_tutti_i_client()
 
-            elif action == "sgegli_sponsor":
+            elif action == "scegli_sponsor":
                 sponsor_scelto = data.get("sponsor", "Nessuno")
                 if sponsor_scelto in ["Hunterbet Tech", "Sigma Main", "Profezia"] and my_data.get("sponsor") == "Nessuno":
                     my_data["sponsor"] = sponsor_scelto
