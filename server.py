@@ -114,7 +114,7 @@ def aggiorna_quotazioni_mercato(g, voto_reale, voto_atteso):
 
 if not carica_dati():
     aggettivi = ["Real", "Atletico", "Sporting", "United", "Elite", "Pro", "Turbo", "Inter", "Virtus", "Fabbrica"]
-    localita = ["Barge", "Envie", "Saluzzo", "Cuneo", "Piemonte", "Alpi", "Valle", "Torino", "Nexus", "Apex"]
+    localita = ["Barge", "Pistoia", "Saluzzo", "Cuneo", "Piemonte", "Alpi", "Valle", "Torino", "Nexus", "Apex"]
     suffissi = ["FC", "Stars", "City", "Rovers", "Academy", "Power", "Calcio", "Team", "Dynamics", "Club"]
     nomi_generati = set()
     while len(squadre_campionato) < 49:
@@ -128,7 +128,14 @@ if not carica_dati():
             })
     
     ruoli_disp = ["Portiere", "Difensore", "Centrocampista", "Attaccante"]
-    nomi_base = ["Rossi", "Smith", "Garcia", "Muller", "Silva", "Kovacic", "Esposito", "Johnson", "Martinez", "Bianchi", "Russo", "Ferrari", "Gomez", "Weber", "Fernandez"]
+    nomi_batt = [
+        "Alessandro", "Lorenzo", "Mattia", "Andrea", "Luca", "Marco", "Giuseppe", "Antonio", "Giovanni", "Roberto", "Stefano", "Paolo", "Luigi", "Vincenzo", "Domenico", "Pasquale", "Fernando", "Diego", "Filippo", "Giacomo",
+        "Kevin", "Michael", "David", "John", "James", "Carlos", "Luis", "Jorge", "Pablo", "William", "Thomas", "Daniel", "Oliver", "Lucas", "Liam", "Arthur", "Leo", "Hugo", "Felix", "Ivan", "Igor", "Vladimir", "Yuri", "Kylian", "Antoine", "Pierre", "Marcel"
+    ]
+    cognomi_base = [
+        "Rossi", "Bianchi", "Ferrari", "Esposito", "Ricci", "Romano", "Colombo", "Gallo", "Conti", "Costa", "Giordano", "Rizzo", "Lombardi", "Moretti", "Barbieri", "Fontana", "Santoro", "Mariani", "Rinaldi", "Caruso",
+        "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Martinez", "Rodriguez", "Lopez", "Gonzalez", "Perez", "Sanchez", "Muller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Dubois", "Rousseau", "Lefevre", "Moreau", "Laurent", "Simon", "Michel", "Ivanov", "Smirnov", "Popov", "Sokolov", "Kuznetsov"
+    ]
     for i in range(1, 501):
         ruolo_scelto = random.choice(ruoli_disp)
         stelle = round(random.uniform(1.0, 5.0) * 2) / 2
@@ -160,7 +167,7 @@ if not carica_dati():
         val_arrotondato = round(val_matematico / 1000) * 1000
 
         database_globale.append({
-            "id": i, "nome": f"{random.choice(nomi_base)} {i}", "ruolo": ruolo_scelto,
+            "id": i, "nome": f"{random.choice(nomi_batt)} {random.choice(cognomi_base)}", "ruolo": ruolo_scelto,
             "squadra": "Svincolato", "eta": random.randint(18, 35), 
             "valore": val_arrotondato, "valore_base": val_arrotondato,
             "media_voto": round(random.uniform(5.5, 7.2), 2), "forma_pct": random.randint(40, 100),
