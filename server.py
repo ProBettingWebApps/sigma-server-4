@@ -17,9 +17,18 @@ except ImportError:
 
 FILE_SALVATAGGIO = "fabbrica_save.json"
 
+MAPPA_TALENTI = {
+    "Talento A": {6: "Muro di Gomma", 12: "+20% Valore Mercato", 18: "Bonus Capitano (Vitalità)"},
+    "Talento B": {6: "Visione Sigma", 12: "Impatto Field Tilt x2", 18: "Bonus Goal (+0.5)"},
+    "Talento C": {6: "Killer Instinct", 12: "Iper-Fragile", 18: "Statistiche MAX"}
+}
+
+TRATTI_DISPONIBILI = ["Veterano", "Cristallo", "Metronomo", "Bomber", "Ninja", "Mulo", "Erede", "Nessuno"]
+
 stato_gioco = {
     "fase": "MERCATO", "timer": 600, "stagione": 1, "giornata": 1,
-    "status_log": "Sistema Protocollo Sigma 4.0 Online", "report_giornata": []
+    "status_log": "Sistema Protocollo Sigma 4.0 Online", "report_giornata": [],
+    "eventi_globali": {}
 }
 
 users_db = {} 
@@ -54,6 +63,53 @@ def carica_dati():
         except Exception: pass
     return False
 
+def calcola_voto_stocastico(g):
+    stelle = g.get("stelle", 1.0)
+    voto_atteso = 4.5 + (stelle * 0.6) 
+    
+    roll_sigma = random.random()
+    if roll_sigma < 0.05: 
+        voto_reale = voto_atteso - random.uniform(1.5, 3.0)
+    elif roll_sigma > 0.95: 
+        voto_reale = voto_atteso + random.uniform(1.5, 3.0)
+    else: 
+        voto_reale = voto_atteso + random.uniform(-1.0, 1.0)
+    
+    tratto = g.get("tratto", "Nessuno")
+    if tratto == "Mulo" and voto_reale < 6.0:
+        voto_reale = 6.0
+    if tratto == "Bomber" and random.random() < 0.3:
+        voto_reale += 1.0
+    if tratto == "Cristallo" and random.random() < 0.15:
+        g["infortunato"] = 1
+        voto_reale -= 1.5
+    if tratto == "Veterano":
+        voto_reale += 0.3
+
+    return round(max(1.0, min(10.0, voto_reale)), 1), round(voto_atteso, 1)
+
+def aggiorna_quotazioni_mercato(g, voto_reale, voto_atteso):
+    vecchio_valore = g.get("valore", 50000)
+    valore_base = g.get("valore_base", 50000)
+    
+    delta_prestazione = (voto_reale - voto_atteso) / 10.0
+    nuovo_valore = vecchio_valore * (1 + delta_prestazione)
+    
+    tratto = g.get("tratto", "Nessuno")
+    if tratto == "Bomber" and delta_prestazione > 0:
+        nuovo_valore = vecchio_valore * (1 + (delta_prestazione * 1.5))
+    if tratto == "Cristallo" and g.get("infortunato") == 1:
+        nuovo_valore = vecchio_valore * 0.70 
+    
+    floor = valore_base * 0.5
+    cap = valore_base * 3.0
+    
+    nuovo_valore = max(floor, min(cap, nuovo_valore))
+    nuovo_valore_arr = round(nuovo_valore / 1000) * 1000
+    
+    g["trend_valore"] = nuovo_valore_arr - vecchio_valore
+    g["valore"] = nuovo_valore_arr
+
 if not carica_dati():
     aggettivi = ["Real", "Atletico", "Sporting", "United", "Elite", "Pro", "Turbo", "Inter", "Virtus", "Fabbrica"]
     localita = ["Barge", "Envie", "Saluzzo", "Cuneo", "Piemonte", "Alpi", "Valle", "Torino", "Nexus", "Apex"]
@@ -73,19 +129,27 @@ if not carica_dati():
     nomi_base = ["Rossi", "Smith", "Garcia", "Muller", "Silva", "Kovacic", "Esposito", "Johnson", "Martinez", "Bianchi", "Russo", "Ferrari", "Gomez", "Weber", "Fernandez"]
     for i in range(1, 501):
         ruolo_scelto = random.choice(ruoli_disp)
-        is_top = random.random() < 0.15
-        if ruolo_scelto == "Portiere": val = random.randint(10000, 25000) if not is_top else random.randint(50000, 150000)
-        elif ruolo_scelto == "Difensore": val = random.randint(10000, 35000) if not is_top else random.randint(60000, 250000)
-        elif ruolo_scelto == "Centrocampista": val = random.randint(15000, 45000) if not is_top else random.randint(80000, 450000)
-        else: val = random.randint(20000, 60000) if not is_top else random.randint(100000, 800000)
-        val_arrotondato = round(val / 1000) * 1000
+        stelle = round(random.uniform(1.0, 5.0) * 2) / 2
+        forza = random.randint(5, 9)
+        destrezza = random.randint(5, 9)
+        vitalita = random.randint(5, 9)
+        
+        tratto_scelto = random.choices(TRATTI_DISPONIBILI, weights=[10, 5, 10, 10, 10, 10, 5, 40])[0]
+        
+        somma_stats = forza + destrezza + vitalita
+        bonus_tratto = 50000 if tratto_scelto == "Erede" else -20000 if tratto_scelto == "Cristallo" else 10000 if tratto_scelto != "Nessuno" else 0
+        
+        val_matematico = int((stelle * 100000) + (somma_stats * 5000) + bonus_tratto)
+        if val_matematico < 10000: val_matematico = 10000
+        val_arrotondato = round(val_matematico / 1000) * 1000
+
         database_globale.append({
             "id": i, "nome": f"{random.choice(nomi_base)} {i}", "ruolo": ruolo_scelto,
             "squadra": "Svincolato", "eta": random.randint(18, 35), 
             "valore": val_arrotondato, "valore_base": val_arrotondato,
             "media_voto": round(random.uniform(5.5, 7.2), 2), "forma_pct": random.randint(40, 100),
-            "stelle": round(random.uniform(1.0, 5.0) * 2) / 2, "forza": random.randint(5, 9),
-            "destrezza": random.randint(5, 9), "vitalita": random.randint(5, 9),
+            "stelle": stelle, "forza": forza, "destrezza": destrezza, "vitalita": vitalita,
+            "tratto": tratto_scelto,
             "infortunato": 1 if random.random() < 0.02 else 0, "squalificato": 1 if random.random() < 0.01 else 0,
             "eventi": "", "fanta_voto": 0, "trend_valore": 0
         })
@@ -110,8 +174,6 @@ def costruisci_pacchetto_personale(username):
     classifica = []
     for u_name, u_data in users_db.items():
         v_rosa_u = sum(g["valore"] for g in dati_client if g["id"] in u_data["rosa"])
-        
-        # --- TUA REGOLA D'ACCIAIO: SE MENO DI 11 GIOCATORI, SEI MATEMATICAMENTE ULTIMO ---
         if len(u_data.get("formazione", [])) < 11:
             sig = -999999.0
         else:
@@ -138,18 +200,27 @@ def costruisci_pacchetto_personale(username):
     classifica.sort(key=lambda x: x["sigma"], reverse=True)
     for idx, c in enumerate(classifica): c["pos"] = idx + 1
 
-    return {
+    pacchetto = {
         "type": "stato_globale", "is_vip": True, "budget": my_data["budget"],
         "sponsor_attivo": my_data.get("sponsor", "Nessuno"),
         "scegli_talento": my_data.get("sponsor", "Nessuno") != "Nessuno" and not my_data.get("talento_scelto_mercato", False),
         "mercato_aperto": (stato_gioco["fase"] == "MERCATO"), "timer": stato_gioco["timer"],
         "stato_str": "MERCATO APERTO" if stato_gioco["fase"] == "MERCATO" else "SIMULAZIONE MATCH",
+        "fase_gioco": stato_gioco["fase"],
         "dati": dati_client, "classifica": classifica, "archivio": archivio_storico,
         "num_rosa": len(my_data["rosa"]), "num_titolari": len(my_data["formazione"]),
         "modulo": my_data["modulo"], "punti_giornata": my_data.get("punti_ultima_giornata", 0.0),
+        "pagella_ultima_gara": my_data.get("pagella_ultima_gara", []),
         "stagione": stato_gioco["stagione"], "giornata": stato_gioco["giornata"],
-        "status": stato_gioco["status_log"], "report_giornata": stato_gioco["report_giornata"]
+        "status": stato_gioco["status_log"], "report_giornata": stato_gioco["report_giornata"],
+        "evento_talento": stato_gioco["eventi_globali"].get(username, ""),
+        "talento_selezionato_nome": my_data.get("nome_talento_scelto", "Nessuno")
     }
+    
+    if username in stato_gioco["eventi_globali"]:
+        del stato_gioco["eventi_globali"][username]
+
+    return pacchetto
 
 async def aggiorna_tutti_i_client():
     for ws, uname in list(connessioni_attive.items()):
@@ -179,7 +250,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     users_db[uname] = {
                         "pin": pin, "budget": 1000000, "rosa": [], "formazione": [],
                         "modulo": "4-4-2", "punti_totali": 0.0, "punti_ultima_giornata": 0.0,
-                        "sponsor": "Nessuno"
+                        "sponsor": "Nessuno", "talento_scelto_mercato": False,
+                        "nome_talento_scelto": "Nessuno", "pagella_ultima_gara": []
                     }
                     salva_dati()
                 connessioni_attive[websocket] = uname
@@ -201,7 +273,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             elif action == "seleziona_sponsor":
                 sponsor_scelto = data.get("sponsor", "Nessuno")
-                if sponsor_scelto in ["Hunterbet Tech", "Sigma Main", "Profezia"]:
+                if sponsor_scelto in ["Hunterbet Tech", "Sigma Main", "Profezia"] and my_data.get("sponsor") == "Nessuno":
                     my_data["sponsor"] = sponsor_scelto
                     if sponsor_scelto == "Hunterbet Tech": my_data["budget"] += 50000
                     elif sponsor_scelto == "Sigma Main": my_data["budget"] += 100000
@@ -211,31 +283,32 @@ async def websocket_endpoint(websocket: WebSocket):
                     
             elif action == "seleziona_talento":
                 talento_scelto = data.get("talento", "Talento A")
-                import random
-                
-                # 1. Creiamo il DNA del prospetto in base a cosa hai cliccato
-                id_talento = f"SIGMA_{random.randint(1000, 9999)}"
-                
-                if talento_scelto == "Talento A":
-                    giocatore_sigma = {"id": id_talento, "nome": "Prospetto Alpha", "ruolo": "DIF", "club": "Sigma Acad.", "valore": 15000, "fanta_voto": 6.0}
-                elif talento_scelto == "Talento B":
-                    giocatore_sigma = {"id": id_talento, "nome": "Prospetto Beta", "ruolo": "CEN", "club": "Sigma Acad.", "valore": 20000, "fanta_voto": 6.0}
-                else:
-                    giocatore_sigma = {"id": id_talento, "nome": "Prospetto Gamma", "ruolo": "ATT", "club": "Sigma Acad.", "valore": 25000, "fanta_voto": 6.0}
+                if my_data.get("talento_scelto_mercato") == False:
+                    id_talento = f"SIGMA_{random.randint(1000, 9999)}"
                     
-                # 2. Lo inseriamo nel database globale del server
-                database_globale.append(giocatore_sigma)
-                
-                # 3. Lo aggiungiamo fisicamente alla rosa della tua squadra
-                if "rosa" not in my_data:
-                    my_data["rosa"] = []
-                my_data["rosa"].append(id_talento)
-                
-                # 4. Chiudiamo la porta: registriamo che il talento è stato preso
-                my_data["talento_scelto_mercato"] = True 
-                
-                stato_gioco["status_log"] = f"{uname} ha acquisito {giocatore_sigma['nome']} dal Draft!"
-                await aggiorna_tutti_i_client()
+                    if talento_scelto == "Talento A":
+                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Alpha", "ruolo": "Difensore", "tratto": "Erede", "valore": 15000}
+                    elif talento_scelto == "Talento B":
+                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Beta", "ruolo": "Centrocampista", "tratto": "Metronomo", "valore": 20000}
+                    else:
+                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Gamma", "ruolo": "Attaccante", "tratto": "Bomber", "valore": 25000}
+                        
+                    giocatore_sigma.update({
+                        "squadra": uname, "eta": 18, "valore_base": giocatore_sigma["valore"], "media_voto": 6.0, "forma_pct": 100,
+                        "stelle": 3.0, "forza": 7, "destrezza": 7, "vitalita": 7,
+                        "infortunato": 0, "squalificato": 0, "eventi": "", "fanta_voto": 6.0, "trend_valore": 0
+                    })
+
+                    database_globale.append(giocatore_sigma)
+                    if "rosa" not in my_data: my_data["rosa"] = []
+                    my_data["rosa"].append(id_talento)
+                    
+                    my_data["talento_scelto_mercato"] = True 
+                    my_data["nome_talento_scelto"] = talento_scelto
+                    
+                    stato_gioco["status_log"] = f"{uname} ha acquisito {giocatore_sigma['nome']} dal Draft!"
+                    await aggiorna_tutti_i_client()
+
             elif action == "vendi" and stato_gioco["fase"] == "MERCATO":
                 g_id = data.get("id")
                 giocatori = [g for g in database_globale if g["id"] == g_id]
@@ -261,22 +334,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(costruisci_pacchetto_personale(uname))
             
             elif action == "admin_skip":
-                # Lo skip interviene solo se siamo alla Giornata 1
                 if stato_gioco["giornata"] == 1 and stato_gioco["fase"] == "MERCATO":
                     stato_gioco["timer"] = 1
-                
+            
             elif action == "prossima_giornata":
                 if stato_gioco["fase"] == "ATTESA_GIORNATA":
                     stato_gioco["fase"] = "MERCATO"
-                    # La giornata è già scattata a fine simulazione, quindi qui NON la aumentiamo,
-                    # ci limitiamo a caricare il timer corretto:
-                    
                     if stato_gioco["giornata"] == 1:
-                        stato_gioco["timer"] = 600  # 10 minuti per la primissima asta 
+                        stato_gioco["timer"] = 600 
                     elif stato_gioco["giornata"] in [6, 12, 18]:
-                        stato_gioco["timer"] = 180  # 3 minuti 
+                        stato_gioco["timer"] = 180 
                     else:
-                        stato_gioco["timer"] = 60   # 1 minuto
+                        stato_gioco["timer"] = 60 
                         
                     stato_gioco["status_log"] = f"Iniziata Giornata {stato_gioco['giornata']}. Prepara la formazione."
                     await aggiorna_tutti_i_client()
@@ -289,72 +358,86 @@ async def game_loop():
     while True:
         try:
             await asyncio.sleep(1)
-            stato_gioco["timer"] -= 1
             
-            if stato_gioco["timer"] <= 0:
+            if stato_gioco["fase"] != "ATTESA_GIORNATA":
+                stato_gioco["timer"] -= 1
+            
+            if stato_gioco["timer"] <= 0 and stato_gioco["fase"] != "ATTESA_GIORNATA":
                 if stato_gioco["fase"] == "MERCATO":
                     stato_gioco["fase"] = "SIMULAZIONE"
                     stato_gioco["timer"] = 15
-                    stato_gioco["status_log"] = "Simulazione tattica in corso..."
+                    stato_gioco["status_log"] = "Simulazione tattica stocastica in corso..."
                     for ws in list(connessioni_attive.keys()):
                         try: await ws.send_json({"type": "simulazione_avvio"})
                         except: pass
                 
                 elif stato_gioco["fase"] == "SIMULAZIONE":
                     report_completo = [f"=== REPORT GIORNATA {stato_gioco['giornata']} ==="]
+                    
+                    for g in database_globale:
+                        g["infortunato"] = 0 
+                        
                     for u_name, u_data in users_db.items():
                         giocatori_in_campo = [g for g in database_globale if g["id"] in u_data["formazione"]]
                         
                         if len(giocatori_in_campo) < 11:
                             punti = 0.0
                             report_str = f"{u_name}: 0.0 pt | (Formazione Incompleta: Atleti {len(giocatori_in_campo)}/11)"
+                            u_data["pagella_ultima_gara"] = []
                         else:
                             voti_dettaglio = []
+                            pagella = []
+                            somma_voti = 0.0
+                            
                             for g in giocatori_in_campo:
-                                voto_prestazione = round(random.uniform(5.0, 8.5), 1)
-                                g["fanta_voto"] = voto_prestazione
+                                voto_reale, voto_atteso = calcola_voto_stocastico(g)
+                                g["fanta_voto"] = voto_reale
+                                aggiorna_quotazioni_mercato(g, voto_reale, voto_atteso)
+                                
+                                somma_voti += voto_reale
                                 cognome = g['nome'].split()[0]
-                                voti_dettaglio.append(f"{cognome} {voto_prestazione}")
-                            try:
-                                punti, _ = sigma_engine.calcola_punteggio_squadra(giocatori_in_campo, u_data.get("modulo", "4-4-2"))
-                                modulo_attivo = u_data.get("modulo", "4-4-2")
-                                if modulo_attivo == "3-5-2": punti += 2.0
-                                elif modulo_attivo == "4-3-3": punti -= 0.5
-                            except:
-                                punti = round(random.uniform(65.0, 85.0), 1)
+                                voti_dettaglio.append(f"{cognome} {voto_reale}")
+                                pagella.append({
+                                    "nome": g["nome"], "ruolo": g["ruolo"], 
+                                    "voto": voto_reale, "tratto": g.get("tratto", "Nessuno")
+                                })
+                            
+                            punti = round(somma_voti, 1)
+                            modulo_attivo = u_data.get("modulo", "4-4-2")
+                            if modulo_attivo == "3-5-2": punti += 2.0
+                            elif modulo_attivo == "4-3-3": punti -= 0.5
+                            
+                            sponsor = u_data.get("sponsor", "Nessuno")
+                            if sponsor == "Sigma Main": punti += 1.5
+                            
                             report_str = f"{u_name}: {punti} pt | Voti: " + ", ".join(voti_dettaglio)
+                            u_data["pagella_ultima_gara"] = pagella
                             
                         u_data["punti_ultima_giornata"] = punti
                         u_data["punti_totali"] += punti
                         report_completo.append(report_str)
+                        
+                        talento_user = u_data.get("nome_talento_scelto")
+                        if talento_user in MAPPA_TALENTI and stato_gioco["giornata"] in MAPPA_TALENTI[talento_user]:
+                            bonus_sbloccato = MAPPA_TALENTI[talento_user][stato_gioco["giornata"]]
+                            stato_gioco["eventi_globali"][u_name] = f"Il tuo {talento_user} ha sbloccato: {bonus_sbloccato}!"
                     
                     stato_gioco["report_giornata"] = report_completo
                     
-                    try: database_globale = sigma_engine.elabora_turno_mercato(database_globale)
-                    except: pass
-
                     for s in squadre_campionato:
                         punti_avv = round(random.uniform(60, 88), 1)
                         s["ultimo_punteggio"] = punti_avv
                         s["punti_totali"] += punti_avv
-                        variazione_mercato = random.randint(-40000, 40000)
-                        s["valore_rosa"] += variazione_mercato
-                        s["budget"] -= variazione_mercato
+                        s["valore_rosa"] += random.randint(-40000, 40000)
 
                     for g in database_globale:
-                        moltiplicatore = random.uniform(0.85, 1.15) 
-                        vecchio_valore = g.get("valore", 50000)
-                        nuovo_valore = round((vecchio_valore * moltiplicatore) / 1000) * 1000
-                        tetto_massimo_personale = g.get("valore_base", 50000) * 3
-                        if nuovo_valore < 5000: nuovo_valore = 5000
-                        if nuovo_valore > tetto_massimo_personale: nuovo_valore = tetto_massimo_personale
-                        g["trend_valore"] = nuovo_valore - vecchio_valore
-                        g["valore"] = nuovo_valore
-                    
-                    # === FINE SIMULAZIONE: AGGIORNIAMO LA GIORNATA E ATTENDIAMO IL CONTINUA ===
+                        if "Svincolato" in str(g.get("squadra", "Svincolato")):
+                            voto_simulato, voto_atteso = calcola_voto_stocastico(g)
+                            aggiorna_quotazioni_mercato(g, voto_simulato, voto_atteso)
+
                     stato_gioco["fase"] = "ATTESA_GIORNATA"
                     stato_gioco["giornata"] += 1
-                    stato_gioco["timer"] = 0 # Aspetta il bottone "Continua la Partita"
+                    stato_gioco["timer"] = 0 
                     
                     if stato_gioco["giornata"] > 24:
                         stato_gioco["status_log"] = "Campionato Terminato! WIPE-OUT in corso..."
@@ -386,6 +469,11 @@ async def game_loop():
                             u_data["budget"] = 1000000
                             u_data["punti_totali"] = 0.0
                             u_data["punti_ultima_giornata"] = 0.0
+                            u_data["sponsor"] = "Nessuno"
+                            u_data["talento_scelto_mercato"] = False
+                            u_data["nome_talento_scelto"] = "Nessuno"
+                            u_data["pagella_ultima_gara"] = []
+                            
                         for s in squadre_campionato:
                             s["punti_totali"] = 0.0
                             s["ultimo_punteggio"] = 0.0
@@ -397,7 +485,7 @@ async def game_loop():
                         
                         stato_gioco["status_log"] = "Stagione Conclusa! Nuovo Campionato Pronto."
                     else:
-                        stato_gioco["status_log"] = "Turno Concluso! Statistiche aggiornate."
+                        stato_gioco["status_log"] = "Turno Concluso! Valutazione in corso. Premi CONTINUA."
 
                     salva_dati()
                     await asyncio.sleep(0.5)
