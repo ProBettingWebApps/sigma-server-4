@@ -130,9 +130,12 @@ if not carica_dati():
     for i in range(1, 501):
         ruolo_scelto = random.choice(ruoli_disp)
         stelle = round(random.uniform(1.0, 5.0) * 2) / 2
-        forza = random.randint(5, 9)
-        destrezza = random.randint(5, 9)
-        vitalita = random.randint(5, 9)
+        
+        # Generazione statistiche dinamica e stocastica con decimali
+        base_stat = 3.5 + stelle  # Es: 1 stella = base 4.5 | 5 stelle = base 8.5
+        forza = round(min(10.0, random.uniform(base_stat - 0.5, base_stat + 1.5)), 1)
+        destrezza = round(min(10.0, random.uniform(base_stat - 0.5, base_stat + 1.5)), 1)
+        vitalita = round(min(10.0, random.uniform(base_stat - 0.5, base_stat + 1.5)), 1)
         
         tratto_scelto = random.choices(TRATTI_DISPONIBILI, weights=[10, 5, 10, 10, 10, 10, 5, 40])[0]
         
