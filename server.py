@@ -395,7 +395,7 @@ async def game_loop():
             await asyncio.sleep(1)
             
             if stato_gioco["fase"] != "ATTESA_GIORNATA":
-                stato_gioco["timer"] -= 1
+                stato_gioco["timer"] = max(0, stato_gioco["timer"] - 1)
             
             if stato_gioco["timer"] <= 0 and stato_gioco["fase"] != "ATTESA_GIORNATA":
                 if stato_gioco["fase"] == "MERCATO":
@@ -549,6 +549,10 @@ async def game_loop():
 
         except Exception as e:
             print(f"ERRORE CRITICO MOTORE SALVATO: {e}")
+            # AUTO-RIPRISTINO IN CASO DI CRASH
+            if stato_gioco["fase"] == "SIMULAZIONE":
+                stato_gioco["fase"] = "MERCATO"
+                stato_gioco["timer"] = 60
             await asyncio.sleep(2)
 
 @app.on_event("startup")
