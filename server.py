@@ -141,11 +141,22 @@ if not carica_dati():
         
         tratto_scelto = random.choices(TRATTI_DISPONIBILI, weights=[10, 5, 10, 10, 10, 10, 5, 40])[0]
         
-        somma_stats = forza + destrezza + vitalita
-        bonus_tratto = 50000 if tratto_scelto == "Erede" else -20000 if tratto_scelto == "Cristallo" else 10000 if tratto_scelto != "Nessuno" else 0
+        # ECONOMIA CALIBRATA SIGMA 4.0
+        if stelle >= 4.5:
+            base_val = random.randint(150000, 200000)
+        elif stelle >= 3.5:
+            base_val = random.randint(80000, 120000)
+        elif stelle >= 2.5:
+            base_val = random.randint(40000, 60000)
+        elif stelle >= 1.5:
+            base_val = random.randint(20000, 30000)
+        else:
+            base_val = random.randint(5000, 15000)
+            
+        bonus_tratto = 10000 if tratto_scelto == "Erede" else -5000 if tratto_scelto == "Cristallo" else 5000 if tratto_scelto != "Nessuno" else 0
         
-        val_matematico = int((stelle * 100000) + (somma_stats * 5000) + bonus_tratto)
-        if val_matematico < 10000: val_matematico = 10000
+        val_matematico = int(base_val + bonus_tratto)
+        if val_matematico < 5000: val_matematico = 5000
         val_arrotondato = round(val_matematico / 1000) * 1000
 
         database_globale.append({
@@ -294,11 +305,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     id_talento = f"SIGMA_{random.randint(1000, 9999)}"
                     
                     if talento_scelto == "Talento A":
-                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Alpha", "ruolo": "Difensore", "tratto": "Erede", "valore": 15000}
+                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Alpha", "ruolo": "Difensore", "tratto": "Erede", "valore": 45000}
                     elif talento_scelto == "Talento B":
-                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Beta", "ruolo": "Centrocampista", "tratto": "Metronomo", "valore": 20000}
+                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Beta", "ruolo": "Centrocampista", "tratto": "Metronomo", "valore": 50000}
                     else:
-                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Gamma", "ruolo": "Attaccante", "tratto": "Bomber", "valore": 25000}
+                        giocatore_sigma = {"id": id_talento, "nome": "Prospetto Gamma", "ruolo": "Attaccante", "tratto": "Bomber", "valore": 55000}
                         
                     giocatore_sigma.update({
                         "squadra": uname, "eta": 18, "valore_base": giocatore_sigma["valore"], "media_voto": 6.0, "forma_pct": 100,
@@ -419,16 +430,16 @@ async def game_loop():
                             except:
                                 punti = round(somma_voti, 1)
 
-                            modulo_attivo = u_data.get("modulo", "4-4-2")
-                            if modulo_attivo == "3-5-2": punti += 2.0
-                            elif modulo_attivo == "4-3-3": punti -= 0.5
-                            
-                            sponsor = u_data.get("sponsor", "Nessuno")
-                            if sponsor == "Sigma Main": punti += 1.5
-                            
-                            report_str = f"{u_name}: {punti} pt | Voti: " + ", ".join(voti_dettaglio)
-                            u_data["pagella_ultima_gara"] = pagella
-                            
+                        modulo_attivo = u_data.get("modulo", "4-4-2")
+                        if modulo_attivo == "3-5-2": punti += 2.0
+                        elif modulo_attivo == "4-3-3": punti -= 0.5
+                        
+                        sponsor = u_data.get("sponsor", "Nessuno")
+                        if sponsor == "Sigma Main": punti += 1.5
+                        
+                        report_str = f"{u_name}: {punti} pt | Voti: " + ", ".join(voti_dettaglio)
+                        u_data["pagella_ultima_gara"] = pagella
+                        
                         u_data["punti_ultima_giornata"] = punti
                         u_data["punti_totali"] += punti
                         report_completo.append(report_str)
