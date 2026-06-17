@@ -177,6 +177,8 @@ def costruisci_pacchetto_personale(username):
     classifica = []
     for u_name, u_data in users_db.items():
         v_rosa_u = sum(g["valore"] for g in dati_client if g["id"] in u_data["rosa"])
+        
+        # --- REGOLA D'ACCIAIO: SE MENO DI 11 GIOCATORI, SEI MATEMATICAMENTE ULTIMO ---
         if len(u_data.get("formazione", [])) < 11:
             sig = -999999.0
         else:
@@ -379,6 +381,8 @@ async def game_loop():
                     
                     for g in database_globale:
                         g["infortunato"] = 0 
+                    
+                    giocatori_aggiornati = set()
                         
                     for u_name, u_data in users_db.items():
                         giocatori_in_campo = [g for g in database_globale if g["id"] in u_data["formazione"]]
@@ -396,6 +400,7 @@ async def game_loop():
                                 voto_reale, voto_atteso = calcola_voto_stocastico(g)
                                 g["fanta_voto"] = voto_reale
                                 aggiorna_quotazioni_mercato(g, voto_reale, voto_atteso)
+                                giocatori_aggiornati.add(g["id"])
                                 
                                 somma_voti += voto_reale
                                 cognome = g['nome'].split()[0]
@@ -405,7 +410,13 @@ async def game_loop():
                                     "voto": voto_reale, "tratto": g.get("tratto", "Nessuno")
                                 })
                             
-                            punti = round(somma_voti, 1)
+                            # INTEGRAZIONE PERFETTA: Il tuo motore vecchio calcola i punti, 
+                            # il motore nuovo gestisce il mercato e le pagelle stocastiche.
+                            try:
+                                punti, _ = sigma_engine.calcola_punteggio_squadra(giocatori_in_campo, u_data.get("modulo", "4-4-2"))
+                            except:
+                                punti = round(somma_voti, 1)
+
                             modulo_attivo = u_data.get("modulo", "4-4-2")
                             if modulo_attivo == "3-5-2": punti += 2.0
                             elif modulo_attivo == "4-3-3": punti -= 0.5
@@ -427,14 +438,19 @@ async def game_loop():
                     
                     stato_gioco["report_giornata"] = report_completo
                     
+                    # Salva le modifiche al DB dal tuo motore
+                    try: database_globale = sigma_engine.elabora_turno_mercato(database_globale)
+                    except: pass
+                    
                     for s in squadre_campionato:
                         punti_avv = round(random.uniform(60, 88), 1)
                         s["ultimo_punteggio"] = punti_avv
                         s["punti_totali"] += punti_avv
                         s["valore_rosa"] += random.randint(-40000, 40000)
 
+                    # Aggiorna il mercato dei giocatori che non sono scesi in campo (Panchina e Svincolati)
                     for g in database_globale:
-                        if "Svincolato" in str(g.get("squadra", "Svincolato")):
+                        if g["id"] not in giocatori_aggiornati:
                             voto_simulato, voto_atteso = calcola_voto_stocastico(g)
                             aggiorna_quotazioni_mercato(g, voto_simulato, voto_atteso)
 
