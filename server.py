@@ -54,6 +54,8 @@ def carica_dati():
             with open(FILE_SALVATAGGIO, "r", encoding="utf-8") as f:
                 dati = json.load(f)
                 stato_gioco = dati.get("stato_gioco", stato_gioco)
+                if "eventi_globali" not in stato_gioco:
+                    stato_gioco["eventi_globali"] = {}
                 users_db = dati.get("users_db", users_db)
                 squadre_campionato = dati.get("squadre_campionato", squadre_campionato)
                 database_globale = dati.get("database_globale", database_globale)
