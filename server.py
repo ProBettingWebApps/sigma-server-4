@@ -289,7 +289,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     stato_gioco["status_log"] = f"{uname} ha acquistato {giocatori[0]['nome']}"
                     await aggiorna_tutti_i_client()
 
-            elif action == "seleziona_sponsor":
+            elif action == "sgegli_sponsor":
                 sponsor_scelto = data.get("sponsor", "Nessuno")
                 if sponsor_scelto in ["Hunterbet Tech", "Sigma Main", "Profezia"] and my_data.get("sponsor") == "Nessuno":
                     my_data["sponsor"] = sponsor_scelto
@@ -299,7 +299,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     stato_gioco["status_log"] = f"{uname} ha siglato un accordo ufficiale con {sponsor_scelto}!"
                     await aggiorna_tutti_i_client()
                     
-            elif action == "seleziona_talento":
+            elif action == "scegli_talento":
                 talento_scelto = data.get("talento", "Talento A")
                 if my_data.get("talento_scelto_mercato") == False:
                     id_talento = f"SIGMA_{random.randint(1000, 9999)}"
