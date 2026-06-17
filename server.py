@@ -35,12 +35,16 @@ users_db = {}
 squadre_campionato = []
 database_globale = []
 archivio_storico = []
+record_stagionali = []
+record_giornata = []
 
 def salva_dati():
     dati = {
         "stato_gioco": stato_gioco, "users_db": users_db,
         "squadre_campionato": squadre_campionato, "database_globale": database_globale,
-        "archivio_storico": archivio_storico
+        "archivio_storico": archivio_storico,
+        "record_stagionali": record_stagionali,
+        "record_giornata": record_giornata
     }
     try:
         with open(FILE_SALVATAGGIO, "w", encoding="utf-8") as f:
@@ -48,7 +52,7 @@ def salva_dati():
     except Exception: pass
 
 def carica_dati():
-    global stato_gioco, users_db, squadre_campionato, database_globale, archivio_storico
+    global stato_gioco, users_db, squadre_campionato, database_globale, archivio_storico, record_stagionali, record_giornata
     if os.path.exists(FILE_SALVATAGGIO):
         try:
             with open(FILE_SALVATAGGIO, "r", encoding="utf-8") as f:
@@ -60,7 +64,9 @@ def carica_dati():
                 squadre_campionato = dati.get("squadre_campionato", squadre_campionato)
                 database_globale = dati.get("database_globale", database_globale)
                 archivio_storico = dati.get("archivio_storico", [])
-            print(">>> ATTENZIONE: DATI VECCHI CARICATI! CAMPIONATO NON AZZERATO! <<<")
+                record_stagionali = dati.get("record_stagionali", [])
+                record_giornata = dati.get("record_giornata", [])
+            print(">>> TELEMETRIA: ALLINEAMENTO COMPLETO DATABASE CONDIVISO O.K. <<<")
             return True
         except Exception: pass
     return False
@@ -140,15 +146,13 @@ if not carica_dati():
         ruolo_scelto = random.choice(ruoli_disp)
         stelle = round(random.uniform(1.0, 5.0) * 2) / 2
         
-        # Generazione statistiche dinamica e stocastica con decimali
-        base_stat = 3.5 + stelle  # Es: 1 stella = base 4.5 | 5 stelle = base 8.5
+        base_stat = 3.5 + stelle
         forza = round(min(10.0, random.uniform(base_stat - 0.5, base_stat + 1.5)), 1)
         destrezza = round(min(10.0, random.uniform(base_stat - 0.5, base_stat + 1.5)), 1)
         vitalita = round(min(10.0, random.uniform(base_stat - 0.5, base_stat + 1.5)), 1)
         
         tratto_scelto = random.choices(TRATTI_DISPONIBILI, weights=[10, 5, 10, 10, 10, 10, 5, 40])[0]
         
-        # ECONOMIA CALIBRATA SIGMA 4.0
         if stelle >= 4.5:
             base_val = random.randint(150000, 200000)
         elif stelle >= 3.5:
@@ -198,7 +202,6 @@ def costruisci_pacchetto_personale(username):
     for u_name, u_data in users_db.items():
         v_rosa_u = sum(g["valore"] for g in dati_client if g["id"] in u_data["rosa"])
         
-        # --- REGOLA D'ACCIAIO: SE MENO DI 11 GIOCATORI, SEI MATEMATICAMENTE ULTIMO ---
         if len(u_data.get("formazione", [])) < 11:
             sig = -999999.0
         else:
@@ -233,6 +236,8 @@ def costruisci_pacchetto_personale(username):
         "stato_str": "MERCATO APERTO" if stato_gioco["fase"] == "MERCATO" else "SIMULAZIONE MATCH",
         "fase_gioco": stato_gioco["fase"],
         "dati": dati_client, "classifica": classifica, "archivio": archivio_storico,
+        "record_stagionali": record_stagionali,
+        "record_giornata": record_giornata,
         "num_rosa": len(my_data["rosa"]), "num_titolari": len(my_data["formazione"]),
         "modulo": my_data["modulo"], "punti_giornata": my_data.get("punti_ultima_giornata", 0.0),
         "pagella_ultima_gara": my_data.get("pagella_ultima_gara", []),
@@ -306,7 +311,7 @@ async def websocket_endpoint(websocket: WebSocket):
             elif action == "scegli_sponsor":
                 sponsor_scelto = data.get("sponsor", "Sponsor Standard")
                 if my_data.get("sponsor") == "Nessuno":
-                    my_data["sponsor"] = sponsor_scelto  # Salva forzatamente per uccidere il popup
+                    my_data["sponsor"] = sponsor_scelto
                     
                     if "Sigma" in sponsor_scelto: 
                         my_data["budget"] += 100000
@@ -371,8 +376,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json(costruisci_pacchetto_personale(uname))
             
             elif action == "admin_skip":
-                if stato_gioco["giornata"] == 1 and stato_gioco["fase"] == "MERCATO":
-                    stato_gioco["timer"] = 1
+                if uname == "SIGMA ADMIN":
+                    stato_gioco["timer"] = 0
+                    stato_gioco["status_log"] = "Sincronizzazione temporale forzata dall'Amministratore centrale."
+                    await aggiorna_tutti_i_client()
             
             elif action == "prossima_giornata":
                 if stato_gioco["fase"] == "ATTESA_GIORNATA":
@@ -391,7 +398,7 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in connessioni_attive: del connessioni_attive[websocket]
 
 async def game_loop():
-    global database_globale, archivio_storico
+    global database_globale, archivio_storico, record_giornata, record_stagionali
     while True:
         try:
             await asyncio.sleep(1)
@@ -442,8 +449,6 @@ async def game_loop():
                                     "voto": voto_reale, "tratto": g.get("tratto", "Nessuno")
                                 })
                             
-                            # INTEGRAZIONE PERFETTA: Il tuo motore vecchio calcola i punti, 
-                            # il motore nuovo gestisce il mercato e le pagelle stocastiche.
                             try:
                                 punti, _ = sigma_engine.calcola_punteggio_squadra(giocatori_in_campo, u_data.get("modulo", "4-4-2"))
                             except:
@@ -463,14 +468,24 @@ async def game_loop():
                         u_data["punti_totali"] += punti
                         report_completo.append(report_str)
                         
+                        if punti > 0:
+                            record_giornata.append({
+                                "nome": u_name,
+                                "stagione": stato_gioco["stagione"],
+                                "giornata": stato_gioco["giornata"],
+                                "punti": punti
+                            })
+                        
                         talento_user = u_data.get("nome_talento_scelto")
                         if talento_user in MAPPA_TALENTI and stato_gioco["giornata"] in MAPPA_TALENTI[talento_user]:
                             bonus_sbloccato = MAPPA_TALENTI[talento_user][stato_gioco["giornata"]]
                             stato_gioco["eventi_globali"][u_name] = f"Il tuo {talento_user} ha sbloccato: {bonus_sbloccato}!"
                     
+                    record_giornata.sort(key=lambda x: x["punti"], reverse=True)
+                    record_giornata = record_giornata[:50]
+                    
                     stato_gioco["report_giornata"] = report_completo
                     
-                    # Salva le modifiche al DB dal tuo motore
                     try: database_globale = sigma_engine.elabora_turno_mercato(database_globale)
                     except: pass
                     
@@ -480,7 +495,6 @@ async def game_loop():
                         s["punti_totali"] += punti_avv
                         s["valore_rosa"] += random.randint(-40000, 40000)
 
-                    # Aggiorna il mercato dei giocatori che non sono scesi in campo (Panchina e Svincolati)
                     for g in database_globale:
                         if g["id"] not in giocatori_aggiornati:
                             voto_simulato, voto_atteso = calcola_voto_stocastico(g)
@@ -491,7 +505,7 @@ async def game_loop():
                     stato_gioco["timer"] = 0 
                     
                     if stato_gioco["giornata"] > 24:
-                        stato_gioco["status_log"] = "Campionato Terminato! WIPE-OUT in corso..."
+                        stato_gioco["status_log"] = "Campionato Terminato! Aggiornamento Albo d'Oro..."
                         classifica_finale = []
                         for un, ud in users_db.items():
                             v_r = sum(g["valore"] for g in database_globale if g["id"] in ud["rosa"])
@@ -500,10 +514,27 @@ async def game_loop():
                             else:
                                 sig = (ud["punti_totali"] * 50) + ((ud["budget"] + v_r) / 1000)
                             classifica_finale.append({"nome": un, "sigma": sig})
+                            
+                            if sig > -999999.0:
+                                record_stagionali.append({
+                                    "nome": un,
+                                    "stagione": stato_gioco["stagione"],
+                                    "sigma": sig
+                                })
+                                
                         for s in squadre_campionato:
-                            classifica_finale.append({"nome": s["nome"], "sigma": (s["punti_totali"] * 50) + 1000})
+                            sig_s = (s["punti_totali"] * 50) + 1000
+                            classifica_finale.append({"nome": s["nome"], "sigma": sig_s})
+                            record_stagionali.append({
+                                "nome": s["nome"],
+                                "stagione": stato_gioco["stagione"],
+                                "sigma": sig_s
+                            })
                             
                         classifica_finale.sort(key=lambda x: x["sigma"], reverse=True)
+                        record_stagionali.sort(key=lambda x: x["sigma"], reverse=True)
+                        record_stagionali = record_stagionali[:50]
+                        
                         archivio_storico.append({
                             "stagione": stato_gioco["stagione"],
                             "vincitore": classifica_finale[0]["nome"] if len(classifica_finale)>0 else "-",
@@ -551,7 +582,6 @@ async def game_loop():
 
         except Exception as e:
             print(f"ERRORE CRITICO MOTORE SALVATO: {e}")
-            # AUTO-RIPRISTINO IN CASO DI CRASH
             if stato_gioco["fase"] == "SIMULAZIONE":
                 stato_gioco["fase"] = "MERCATO"
                 stato_gioco["timer"] = 60
