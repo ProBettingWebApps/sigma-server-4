@@ -298,7 +298,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
             elif data.get("type") == "scelta_talento_iniziale":
                 my_data["nome_talento_scelto"] = data.get("talento")
+                my_data["talento_scelto_mercato"] = True
                 salva_dati()
+                await aggiorna_tutti_i_client()
                 continue
 
             elif action == "scegli_sponsor":
