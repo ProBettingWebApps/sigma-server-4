@@ -192,15 +192,15 @@ def costruisci_pacchetto_personale(username):
     if not my_data: return {"type": "errore_login", "msg": "Utente non trovato nel sistema"}
 
     dati_client = copy.deepcopy(database_globale)
-    valore_rosa = sum(g["valore"] for g in dati_client if g["id"] in my_data["rosa"])
+    valore_rosa = sum(g["valore"] for g in dati_client if str(g["id"]) in [str(r) for r in my_data["rosa"]])
     
     for g in dati_client:
-        g["nella_mia_rosa"] = (g["id"] in my_data["rosa"])
-        g["titolare"] = (g["id"] in my_data["formazione"])
+        g["nella_mia_rosa"] = any(str(r) == str(g["id"]) for r in my_data["rosa"])
+        g["titolare"] = any(str(f) == str(g["id"]) for f in my_data["formazione"])
 
     classifica = []
     for u_name, u_data in users_db.items():
-        v_rosa_u = sum(g["valore"] for g in dati_client if g["id"] in u_data["rosa"])
+        v_rosa_u = sum(g["valore"] for g in dati_client if str(g["id"]) in [str(r) for r in u_data["rosa"]])
         
         if len(u_data.get("formazione", [])) < 11:
             sig = -999999.0
@@ -293,12 +293,14 @@ async def websocket_endpoint(websocket: WebSocket):
             my_data = users_db[uname]
 
             if action == "compra" and stato_gioco["fase"] == "MERCATO":
-                g_id = data.get("id")
-                giocatori = [g for g in database_globale if g["id"] == g_id]
-                if giocatori and g_id not in my_data["rosa"] and my_data["budget"] >= giocatori[0]["valore"]:
+                g_id = str(data.get("id"))
+                giocatori = [g for g in database_globale if str(g.get("id")) == g_id]
+                in_rosa = any(str(r) == g_id for r in my_data["rosa"])
+                if giocatori and not in_rosa and my_data["budget"] >= giocatori[0]["valore"]:
                     my_data["budget"] -= giocatori[0]["valore"]
-                    my_data["rosa"].append(g_id)
+                    my_data["rosa"].append(giocatori[0]["id"])
                     stato_gioco["status_log"] = f"{uname} ha acquistato {giocatori[0]['nome']}"
+                    salva_dati()
                     await aggiorna_tutti_i_client()
 
             elif data.get("type") == "scelta_talento_iniziale":
@@ -352,23 +354,30 @@ async def websocket_endpoint(websocket: WebSocket):
                     await aggiorna_tutti_i_client()
 
             elif action == "vendi" and stato_gioco["fase"] == "MERCATO":
-                g_id = data.get("id")
-                giocatori = [g for g in database_globale if g["id"] == g_id]
-                if giocatori and g_id in my_data["rosa"]:
+                g_id = str(data.get("id"))
+                giocatori = [g for g in database_globale if str(g.get("id")) == g_id]
+                in_rosa = any(str(r) == g_id for r in my_data["rosa"])
+                if giocatori and in_rosa:
                     my_data["budget"] += giocatori[0]["valore"]
-                    my_data["rosa"].remove(g_id)
-                    if g_id in my_data["formazione"]: my_data["formazione"].remove(g_id)
+                    my_data["rosa"] = [r for r in my_data["rosa"] if str(r) != g_id]
+                    my_data["formazione"] = [f for f in my_data["formazione"] if str(f) != g_id]
+                    salva_dati()
                     await aggiorna_tutti_i_client()
             
             elif action == "schiera":
-                g_id = data.get("id")
-                if g_id in my_data["rosa"] and g_id not in my_data["formazione"] and len(my_data["formazione"]) < 11:
-                    my_data["formazione"].append(g_id)
+                g_id = str(data.get("id"))
+                in_rosa = any(str(r) == g_id for r in my_data["rosa"])
+                in_formazione = any(str(f) == g_id for f in my_data["formazione"])
+                if in_rosa and not in_formazione and len(my_data["formazione"]) < 11:
+                    id_orig = next((r for r in my_data["rosa"] if str(r) == g_id), g_id)
+                    my_data["formazione"].append(id_orig)
+                    salva_dati()
                     await websocket.send_json(costruisci_pacchetto_personale(uname))
             
             elif action == "panchina":
-                g_id = data.get("id")
-                if g_id in my_data["formazione"]: my_data["formazione"].remove(g_id)
+                g_id = str(data.get("id"))
+                my_data["formazione"] = [f for f in my_data["formazione"] if str(f) != g_id]
+                salva_dati()
                 await websocket.send_json(costruisci_pacchetto_personale(uname))
             
             elif action == "set_modulo":
@@ -424,7 +433,7 @@ async def game_loop():
                     giocatori_aggiornati = set()
                         
                     for u_name, u_data in users_db.items():
-                        giocatori_in_campo = [g for g in database_globale if g["id"] in u_data["formazione"]]
+                        giocatori_in_campo = [g for g in database_globale if str(g["id"]) in [str(f) for f in u_data["formazione"]]]
                         
                         if len(giocatori_in_campo) < 11:
                             punti = 0.0
@@ -508,7 +517,7 @@ async def game_loop():
                         stato_gioco["status_log"] = "Campionato Terminato! Aggiornamento Albo d'Oro..."
                         classifica_finale = []
                         for un, ud in users_db.items():
-                            v_r = sum(g["valore"] for g in database_globale if g["id"] in ud["rosa"])
+                            v_r = sum(g["valore"] for g in database_globale if str(g["id"]) in [str(r) for r in ud["rosa"]])
                             if len(ud.get("formazione", [])) < 11:
                                 sig = -999999.0
                             else:
