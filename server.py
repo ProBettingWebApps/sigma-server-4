@@ -278,35 +278,35 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.send_json({"type": "errore_login", "msg": "PIN errato."})
                         continue
                 else:
-            # --- ZONA VERDE: LOGICA LOBBY OSSERVATORI ---
-            giornata_attuale = stato_gioco.get("giornata", 1)
-            
-            if giornata_attuale > 1:
-                budget_iniziale = 0
-                stato_account = "OSSERVATORE"
-            else:
-                budget_iniziale = 1000000
-                stato_account = "ATTIVO"
-            # --------------------------------------------
+                    # --- ZONA VERDE: LOGICA LOBBY OSSERVATORI ---
+                    giornata_attuale = stato_gioco.get("giornata", 1)
+                    
+                    if giornata_attuale > 1:
+                        budget_iniziale = 0
+                        stato_account = "OSSERVATORE"
+                    else:
+                        budget_iniziale = 1000000
+                        stato_account = "ATTIVO"
+                    # --------------------------------------------
 
-            users_db[uname] = {
-                "pin": pin, 
-                "budget": budget_iniziale, 
-                "rosa": [], 
-                "formazione": [],
-                "modulo": "4-4-2", 
-                "punti_totali": 0.0, 
-                "punti_ultima_giornata": 0.0,
-                "sponsor": "Nessuno", 
-                "talento_scelto_mercato": False,
-                "nome_talento_scelto": "Nessuno", 
-                "pagella_ultima_gara": [],
-                "stato_account": stato_account  # <-- Il nuovo "Bollino" di stato
-            }
-            salva_dati()
-            connessioni_attive[websocket] = uname
-            await websocket.send_json(costruisci_pacchetto_personale(uname))
-            continue
+                    users_db[uname] = {
+                        "pin": pin, 
+                        "budget": budget_iniziale, 
+                        "rosa": [], 
+                        "formazione": [],
+                        "modulo": "4-4-2", 
+                        "punti_totali": 0.0, 
+                        "punti_ultima_giornata": 0.0,
+                        "sponsor": "Nessuno", 
+                        "talento_scelto_mercato": False,
+                        "nome_talento_scelto": "Nessuno", 
+                        "pagella_ultima_gara": [],
+                        "stato_account": stato_account  # <-- Il nuovo "Bollino" di stato
+                    }
+                    salva_dati()
+                    connessioni_attive[websocket] = uname
+                    await websocket.send_json(costruisci_pacchetto_personale(uname))
+                continue
 
             if websocket not in connessioni_attive: continue
             uname = connessioni_attive[websocket]
