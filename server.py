@@ -471,7 +471,7 @@ async def game_loop():
                                 giocatori_aggiornati.add(g["id"])
                                 
                                 somma_voti += voto_reale
-                                cognome = g['nome'].split()[0]
+                                cognome = g['nome'].split()[-1]
                                 voti_dettaglio.append(f"{cognome} {voto_reale}")
                                 pagella.append({
                                     "nome": g["nome"], "ruolo": g["ruolo"], 
