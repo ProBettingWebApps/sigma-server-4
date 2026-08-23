@@ -60,56 +60,32 @@ st.set_page_config(
 
 import base64
 
-# Funzione per leggere l'immagine locale e convertirla in codice per lo sfondo
-def get_base64_of_bin_file(bin_file):
+def imposta_sfondo(immagine_locale):
     try:
-        with open(bin_file, 'rb') as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
+        with open(immagine_locale, "rb") as f:
+            dati_immagine = f.read()
+        codifica_b64 = base64.b64encode(dati_immagine).decode()
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background-image: url("data:image/jpg;base64,{codifica_b64}");
+                background-size: cover;
+                background-position: center;
+                background-attachment: fixed;
+                background-color: rgba(17, 24, 39, 0.85); /* Effetto trasparenza/oscuramento TV */
+                background-blend-mode: overlay;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
     except FileNotFoundError:
-        return None
+        pass # Se non trova il banner, prosegue senza bloccarsi
 
-# Carica l'immagine dal percorso della cartella del progetto
-img_base64 = get_base64_of_bin_file('banner.jpg')
+# Richiama la funzione
+imposta_sfondo("banner.jpg")
 
-TICKER_DISCLAIMER = (
-    "Ok, ragazzi. La LIVE è muta, stiamo utilizzando un software "
-    "(non in vendita al momento), che si chiama Protocollo Sigma 4.0... "
-    "Solo dati reali del parser · Quote sotto 1.60 scartate · "
-    "Distribuzione Sigma · Nessun dato simulato"
-)
-
-_css_extra = """
-<style>
-[data-testid="stSidebar"] {display: none !important;}
-[data-testid="stSidebarCollapsedControl"] {display: none !important;}
-section.main > div {padding-top: 0.5rem;}
-</style>
-"""
-
-if img_base64:
-    # Applica l'immagine di sfondo impostando il formato corretto (jpeg) e una patina scura
-    sfondo_css = f"""
-    <style>
-    [data-testid="stAppViewContainer"] {{
-        background: linear-gradient(rgba(14, 17, 23, 0.95), rgba(14, 17, 23, 0.95)),
-                    url("data:image/jpeg;base64,{img_base64}") !important;
-        background-size: cover !important;
-        background-position: center !important;
-        background-attachment: fixed !important;
-    }}
-
-    /* Rende trasparente la barra superiore */
-    [data-testid="stHeader"] {{
-        background-color: transparent !important;
-    }}
-    [data-testid="stSidebar"] {{display: none !important;}}
-    [data-testid="stSidebarCollapsedControl"] {{display: none !important;}}
-    </style>
-    """
-    st.markdown(sfondo_css, unsafe_allow_html=True)
-else:
-    st.markdown(_css_extra, unsafe_allow_html=True)
 
 
 RAW_RESULTS_RE = re.compile(
