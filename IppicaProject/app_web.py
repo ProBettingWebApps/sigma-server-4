@@ -6939,8 +6939,8 @@ def _render_v1025_header(numero_partenti: int) -> None:
             letter-spacing: 0.02em;
             background: linear-gradient(
                 92deg,
-                #ffd700 0%,
-                #fff8e7 38%,
+                #00ffaa 0%,
+                #e0fff5 38%,
                 #00e5ff 72%,
                 #4da6ff 100%
             );
