@@ -7,13 +7,17 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from dataclasses import dataclass, field
+from datetime import datetime
+
+# Gestione sicura di Tkinter per l'ambiente web (Streamlit Cloud)
 try:
     import tkinter as tk
     from tkinter import messagebox, scrolledtext, ttk
     TK_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError):
     TK_AVAILABLE = False
-
+    tk = None
 DB_PATH = "ippica_dati.db"
 
 ETA_RE = re.compile(r"(?i)Età:\s*(\d+)")
