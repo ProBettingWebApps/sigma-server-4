@@ -3108,7 +3108,7 @@ def _deserializza_pronostico_generato(payload: str | None) -> dict[str, object] 
     def dataframe(records: object) -> pd.DataFrame:
         if not isinstance(records, list) or not records:
             return pd.DataFrame()
-        return pd.read_json(json.dumps(records), orient="records")
+        return pd.read_json(io.StringIO(json.dumps(records)), orient="records")
 
     piazzato = dataframe(dati.get("piazzato"))
     sorpresa = dataframe(dati.get("sorpresa"))
@@ -3156,7 +3156,7 @@ def _deserializza_classifica(payload: str | None) -> pd.DataFrame | None:
     if not payload:
         return None
     try:
-        dati = pd.read_json(payload, orient="records")
+        dati = pd.read_json(io.StringIO(payload), orient="records")
     except ValueError:
         return None
     if dati.empty:
