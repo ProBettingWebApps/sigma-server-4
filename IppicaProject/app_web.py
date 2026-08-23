@@ -84,7 +84,7 @@ def imposta_sfondo(immagine_locale):
         pass # Se non trova il banner, prosegue senza bloccarsi
 
 # Richiama la funzione
-imposta_sfondo("banner.jpg")
+imposta_sfondo("IppicaProject/banner.jpg")
 
 
 
