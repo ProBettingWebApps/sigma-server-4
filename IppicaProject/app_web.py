@@ -14,6 +14,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 import pandas as pd
+import io
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
@@ -69,12 +70,10 @@ def imposta_sfondo(immagine_locale):
             f"""
             <style>
             .stApp {{
-                background-image: url("data:image/jpg;base64,{codifica_b64}");
+                background-image: url("data:image/png;base64,{codifica_b64}");
                 background-size: cover;
                 background-position: center;
                 background-attachment: fixed;
-                background-color: rgba(17, 24, 39, 0.85); /* Effetto trasparenza/oscuramento TV */
-                background-blend-mode: overlay;
             }}
             </style>
             """,
@@ -84,7 +83,7 @@ def imposta_sfondo(immagine_locale):
         pass # Se non trova il banner, prosegue senza bloccarsi
 
 # Richiama la funzione
-imposta_sfondo("IppicaProject/banner.jpg")
+imposta_sfondo("banner.png")
 
 
 
@@ -3144,7 +3143,7 @@ def _serializza_partenti(partenti: pd.DataFrame) -> str:
 def _deserializza_partenti(payload: str) -> pd.DataFrame:
     if not payload:
         return _dataframe_dati_gara_vuoto()
-    dati = pd.read_json(payload, orient="records")
+    dati = pd.read_json(io.StringIO(payload), orient="records")
     if dati.empty:
         return _dataframe_dati_gara_vuoto()
     for colonna in DATI_GARA_COLUMNS:
