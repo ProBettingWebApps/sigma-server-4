@@ -17,7 +17,10 @@ try:
     TK_AVAILABLE = True
 except (ImportError, RuntimeError):
     TK_AVAILABLE = False
-    tk = None
+    class MockTk:
+        pass
+    class tk:
+        Tk = MockTk
 DB_PATH = "ippica_dati.db"
 
 ETA_RE = re.compile(r"(?i)Età:\s*(\d+)")
