@@ -69,6 +69,15 @@ st.markdown(
     [data-testid="stHeader"] {
         background-color: transparent !important;
     }
+    /* Forza il colore del testo a bianco panna su tutta l'app */
+    .stApp, p, span, h1, h2, h3, h4, h5, h6, label, li {
+        color: #F3F4F6 !important;
+    }
+    
+    /* Colora di bianco anche i titoli dei menu a tendina (expander) */
+    .streamlit-expanderHeader {
+        color: #F3F4F6 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
