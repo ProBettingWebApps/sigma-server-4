@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import re
 import sqlite3
-import statistics
-import tkinter as tk
-import uuid
-from dataclasses import dataclass, field
-from datetime import datetime
-from tkinter import messagebox, scrolledtext, ttk
+try:
+    import tkinter as tk
+    from tkinter import messagebox, scrolledtext, ttk
+    TK_AVAILABLE = True
+except ImportError:
+    TK_AVAILABLE = False
 
 DB_PATH = "ippica_dati.db"
 
