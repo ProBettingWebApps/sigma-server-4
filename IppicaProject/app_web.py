@@ -59,31 +59,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-import base64
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background: linear-gradient(180deg, #2A2D34 0%, #141518 100%) !important;
+    }
+    /* Assicurati che i contenitori principali abbiano sfondo trasparente per far vedere il grigio */
+    [data-testid="stHeader"] {
+        background-color: transparent !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-def imposta_sfondo(immagine_locale):
-    try:
-        with open(immagine_locale, "rb") as f:
-            dati_immagine = f.read()
-        codifica_b64 = base64.b64encode(dati_immagine).decode()
-        st.markdown(
-            f"""
-            <style>
-            .stApp {{
-                background-image: url("data:image/png;base64,{codifica_b64}");
-                background-size: cover;
-                background-position: center;
-                background-attachment: fixed;
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
-    except FileNotFoundError:
-        pass # Se non trova il banner, prosegue senza bloccarsi
-
-# Richiama la funzione
-imposta_sfondo("banner.png")
 
 
 
