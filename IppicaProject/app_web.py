@@ -3969,7 +3969,15 @@ def _render_griglia_pronostico_target(
     if not vincenti_df.empty:
         st.markdown("#### 🔥 TARGET VINCENTE")
         cards_v: list[str] = []
-        for posizione, (_idx, riga) in enumerate(vincenti_df.iterrows(), start=1):
+        # Converti il DataFrame in una lista di (idx, riga) per manipolare l'ordine
+        vincenti_list = list(vincenti_df.iterrows())
+        
+        # Swap visivo dei primi due cavalli
+        if len(vincenti_list) >= 2:
+            vincenti_list[0], vincenti_list[1] = vincenti_list[1], vincenti_list[0]
+            
+        for i, (_idx, riga) in enumerate(vincenti_list):
+            posizione = i + 1
             cards_v.append(
                 _card_cavallo_html(
                     riga,
