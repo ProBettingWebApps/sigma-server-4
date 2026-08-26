@@ -136,7 +136,7 @@ CODICE_GABBIA_RIGA_RE = re.compile(
     r"^\s*(?P<codice>[A-Za-z]\d{1,2}|G\d{1,2})\s*$"
 )
 NOME_CAVALLO_RIGA_RE = re.compile(
-    r"^\s*(?P<nome>[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿][A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿0-9'\.\- ]{1,80})\s*$"
+    r"^\s*(?P<nome>[\w\s'\.\-]{1,80})\s*$", re.UNICODE
 )
 AGE_RE = re.compile(r"(?i)\b(?P<eta>\d{1,2}YO)\b")
 RATING_RE = re.compile(r"(?i)Rating\s*:\s*(?P<rating>\d+(?:[.,]\d+)?)")
@@ -1464,13 +1464,13 @@ def _estrai_nome_cavallo_da_riga(riga: str) -> str | None:
     if not pulito or len(pulito) < 2:
         return None
     if AGE_RE.search(pulito) and not re.search(
-        r"(?i)[A-Za-zÃ€-Ã¶]{3,}", re.sub(r"\d{1,2}YO", "", pulito, flags=re.I)
+        r"(?i)[\w]{3,}", re.sub(r"\d{1,2}YO", "", pulito, flags=re.I)
     ):
         return None
     nome = _riga_e_nome_cavallo(pulito)
     if nome:
         return nome
-    if re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]", pulito) and not re.fullmatch(
+    if re.search(r"[\w]", pulito) and not re.fullmatch(
         r"(?i)(castrone|fattrice|intero|gelding|mare|stallion)", pulito
     ):
         return pulito
