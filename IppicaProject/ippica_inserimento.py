@@ -1,6 +1,6 @@
-"""
+﻿"""
 Scheda ippica completa: parsing, SQLite, analisi pronostico, GUI Tkinter.
-I partenti sono numerati in ordine di inserimento (Cavallo n. 1, n. 2, …).
+I partenti sono numerati in ordine di inserimento (Cavallo n. 1, n. 2, â€¦).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import uuid
 
 DB_PATH = "ippica_dati.db"
 
-ETA_RE = re.compile(r"(?i)Età:\s*(\d+)")
+ETA_RE = re.compile(r"(?i)EtÃ :\s*(\d+)")
 SESSO_RE = re.compile(r"(?i)Sesso:\s*(.+)")
 FLATSIX_RE = re.compile(r"(?i)FlatSix:\s*(\d+)")
 TOTALSIX_RE = re.compile(r"(?i)TotalSix:\s*(\d+)")
@@ -47,7 +47,7 @@ RACE_LINE_RE = re.compile(
 COMPACT_RACE_RE = re.compile(
     rf"(?P<posizione>\d|\d{{2}})"
     rf"(?P<data>{DATE_PATTERN})"
-    r"(?P<ippodromo>[^\W\d_]+(?:[\s'’.\-]+[^\W\d_]+)*?)\s*"
+    r"(?P<ippodromo>[^\W\d_]+(?:[\s'â€™.\-]+[^\W\d_]+)*?)\s*"
     r"(?P<distanza>\d+(?:[.,]\d+)?)\s*"
     r"(?P<unita>yards|meters)\s*"
     r"(?P<parte>\d{1,2})\s*"
@@ -58,7 +58,7 @@ COMPACT_RACE_RE = re.compile(
 RACE_DETAILS_RE = re.compile(
     r"^(.+?)\s+"                 # ippodromo: testo libero
     r"(\d+(?:[.,]\d+)?)\s*"     # distanza
-    r"([^\d\s]+)\s*"             # unità libera: m, yards, km, miles...
+    r"([^\d\s]+)\s*"             # unitÃ  libera: m, yards, km, miles...
     r"(\d{1,2})\s*"              # partenza/gabbia
     r"(.+?)\s*$",                 # fantino
 )
@@ -112,7 +112,7 @@ class PartenteGaraGrezzo:
 
 
 def _valida_inizio_blocco_partente(linee: list[str], indice: int) -> bool:
-    """Conferma che la riga con solo il N° apre un blocco cavallo reale."""
+    """Conferma che la riga con solo il NÂ° apre un blocco cavallo reale."""
     if indice + 1 >= len(linee):
         return False
     pos = indice + 1
@@ -121,7 +121,7 @@ def _valida_inizio_blocco_partente(linee: list[str], indice: int) -> bool:
     if pos >= len(linee):
         return False
     candidato = linee[pos].strip()
-    if not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}", candidato):
+    if not re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]{2,}", candidato):
         return False
     if re.match(r"(?i)^rating\b", candidato):
         return False
@@ -165,7 +165,7 @@ def _estrai_nome_inizio_blocco(linee: list[str]) -> str | None:
     if indice >= len(linee):
         return None
     nome = linee[indice].strip()
-    if not nome or not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}", nome):
+    if not nome or not re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]{2,}", nome):
         return None
     return nome
 
@@ -193,7 +193,7 @@ def _estrai_fantino_dopo_eta(linee: list[str], indice_eta: int) -> str | None:
         if NUMERO_PARTENTE_ISOLATO_RE.fullmatch(testo):
             break
         fantino = _normalizza_fantino_estratto(testo)
-        if fantino and re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ.]", fantino):
+        if fantino and re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿.]", fantino):
             return fantino
     return None
 
@@ -227,7 +227,7 @@ def _estrai_eta_da_blocco(linee: list[str]) -> str:
 
 
 def _estrai_decimali_coda_blocco(linee: list[str]) -> list[float]:
-    """Quote in colonna in coda al blocco (ignora 3ª e 4ª colonna in uso)."""
+    """Quote in colonna in coda al blocco (ignora 3Âª e 4Âª colonna in uso)."""
     raccolti: list[float] = []
     for riga in reversed(linee):
         testo = riga.strip()
@@ -241,7 +241,7 @@ def _estrai_decimali_coda_blocco(linee: list[str]) -> list[float]:
             break
         if re.search(r"(?i)\bkg\b", testo):
             break
-        if re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", testo):
+        if re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]", testo):
             if raccolti:
                 break
             continue
@@ -309,7 +309,7 @@ def _parse_singolo_blocco_partente(
 def parse_partenti_testo_grezzo(testo: str) -> list[PartenteGaraGrezzo]:
     """
     Estrae i partenti da testo bookmaker (Trotto + Galoppo).
-    Lettura a blocchi: N° isolato → gabbia opzionale → nome → fantino → quote.
+    Lettura a blocchi: NÂ° isolato â†’ gabbia opzionale â†’ nome â†’ fantino â†’ quote.
     Nessun dato simulato; salta blocchi incompleti o con quota vincente < 1.60.
     """
     grezzo = testo.strip()
@@ -437,10 +437,10 @@ def parse_compact_races(scheda_testo: str) -> list[Corsa]:
 
 
 def parse_race_blob(blob: str) -> tuple[list[Corsa], list[str]]:
-    """Estrae corse internazionali senza dizionari di ippodromi o unità.
+    """Estrae corse internazionali senza dizionari di ippodromi o unitÃ .
 
-    Una corsa è delimitata da posizione+data all'inizio e quota numerica
-    alla fine. L'unità viene acquisita come testo libero e conservata.
+    Una corsa Ã¨ delimitata da posizione+data all'inizio e quota numerica
+    alla fine. L'unitÃ  viene acquisita come testo libero e conservata.
     """
     righe = [riga.strip() for riga in blob.splitlines() if riga.strip()]
 
@@ -474,25 +474,28 @@ def parse_race_blob(blob: str) -> tuple[list[Corsa], list[str]]:
             )
         return corse_trovate, []
 
-    # Fallback per il vecchio formato web con più corse concatenate.
+    # Fallback per il vecchio formato web con piÃ¹ corse concatenate.
     corse: list[Corsa] = []
     errors: list[str] = []
     pos = 0
-    text = re.sub(r"[\r\n]+", " ", blob.strip())
+    text = " ".join(blob.strip().split())
+    loop_count = 0
 
     while pos < len(text):
+        if loop_count > 1000: break
+        loop_count += 1
         chunk = text[pos:].lstrip()
         pos += len(text[pos:]) - len(chunk)
         header = _split_posizione_data(chunk)
         if not header:
             if chunk:
-                errors.append(chunk[:80] + ("…" if len(chunk) > 80 else ""))
+                errors.append(chunk[:80] + ("â€¦" if len(chunk) > 80 else ""))
             break
         posizione, data_gara, tail = header
 
         quota_boundary = _find_quota_boundary(tail)
         if quota_boundary is None:
-            errors.append(chunk[:80] + ("…" if len(chunk) > 80 else ""))
+            errors.append(chunk[:80] + ("â€¦" if len(chunk) > 80 else ""))
             break
         quota_start, quota_end, quota_token = quota_boundary
 
@@ -562,7 +565,7 @@ def parse_scheda_completa(raw: str, numero_partente: int) -> SchedaCavallo | Non
         "Note",
         (
             "Cavallo",
-            "Età",
+            "EtÃ ",
             "Sesso",
             "Allenatore",
             "Genealogia",
@@ -579,7 +582,7 @@ def parse_scheda_completa(raw: str, numero_partente: int) -> SchedaCavallo | Non
             "Notes",
             (
                 "Cavallo",
-                "Età",
+                "EtÃ ",
                 "Allenatore",
                 "Genealogia",
                 "Stato di Forma",
@@ -677,8 +680,8 @@ def analizza_cavallo(scheda: SchedaCavallo) -> str:
     lines: list[str] = [
         f"=== Analisi: {scheda.nome} (partente n. {scheda.numero_partente}) ===",
         "",
-        "— Anagrafica —",
-        f"Età: {scheda.eta or '(mancante)'} | Sesso: {scheda.sesso or '(mancante)'}",
+        "â€” Anagrafica â€”",
+        f"EtÃ : {scheda.eta or '(mancante)'} | Sesso: {scheda.sesso or '(mancante)'}",
         f"Allenatore: {scheda.allenatore or '(mancante)'}",
         f"FlatSix: {scheda.flatsix or '(mancante)'}",
         f"Corse lette: {len(scheda.corse)}",
@@ -692,7 +695,7 @@ def analizza_cavallo(scheda: SchedaCavallo) -> str:
         )
     lines.append("")
 
-    lines.append("— Trend di forma (FlatSix) —")
+    lines.append("â€” Trend di forma (FlatSix) â€”")
     if scheda.flatsix:
         digits = [int(c) for c in scheda.flatsix if c.isdigit()]
         if len(digits) >= 2:
@@ -701,15 +704,15 @@ def analizza_cavallo(scheda: SchedaCavallo) -> str:
             avg_recent = statistics.mean(recent)
             avg_older = statistics.mean(older) if older else avg_recent
             if avg_recent < avg_older:
-                trend = "miglioramento (valori recenti più bassi → prestazioni migliori)."
+                trend = "miglioramento (valori recenti piÃ¹ bassi â†’ prestazioni migliori)."
             elif avg_recent > avg_older:
-                trend = "peggioramento (valori recenti più alti)."
+                trend = "peggioramento (valori recenti piÃ¹ alti)."
             else:
-                trend = "stabilità nella sequenza FlatSix."
-            lines.append(f"Sequenza: {' → '.join(str(d) for d in digits)}")
+                trend = "stabilitÃ  nella sequenza FlatSix."
+            lines.append(f"Sequenza: {' â†’ '.join(str(d) for d in digits)}")
             lines.append(
                 f"Media ultimi {len(recent)}: {avg_recent:.2f} | "
-                f"media precedenti: {avg_older:.2f} → {trend}"
+                f"media precedenti: {avg_older:.2f} â†’ {trend}"
             )
         elif digits:
             lines.append(f"Sequenza troppo corta per un trend: {digits[0]}.")
@@ -719,7 +722,7 @@ def analizza_cavallo(scheda: SchedaCavallo) -> str:
         lines.append("FlatSix assente: trend di forma non calcolabile.")
 
     lines.append("")
-    lines.append("— Analisi metrica / distanza —")
+    lines.append("â€” Analisi metrica / distanza â€”")
     if scheda.corse:
         distanze = [
             float(c.distanza_m)
@@ -738,19 +741,19 @@ def analizza_cavallo(scheda: SchedaCavallo) -> str:
         lines.append(
             f"Distanze numeriche: min {min(distanze):g}, max {max(distanze):g}, "
             f"media {media:.0f}, escursione {spread:g}. "
-            "Il confronto diretto è indicativo se le unità sono diverse."
+            "Il confronto diretto Ã¨ indicativo se le unitÃ  sono diverse."
         )
         if spread <= 200:
             lines.append("Profilo coerente: specialista su distanza simile.")
         elif spread <= 400:
-            lines.append("Profilo moderato: flessibilità media sulle distanze.")
+            lines.append("Profilo moderato: flessibilitÃ  media sulle distanze.")
         else:
             lines.append("Profilo variabile: escursione elevata tra le ultime uscite.")
     elif not scheda.corse:
         lines.append("Nessuna corsa valida: analisi distanza non disponibile.")
 
     lines.append("")
-    lines.append("— Trend fantino e quota —")
+    lines.append("â€” Trend fantino e quota â€”")
     if scheda.corse:
         ordered = sorted(
             scheda.corse,
@@ -768,7 +771,7 @@ def analizza_cavallo(scheda: SchedaCavallo) -> str:
             else:
                 q_trend = "quote sostanzialmente stabili."
             lines.append(
-                f"Quota prima uscita (cronologica): {quote[0]:.2f} → "
+                f"Quota prima uscita (cronologica): {quote[0]:.2f} â†’ "
                 f"ultima: {quote[-1]:.2f}. {q_trend}"
             )
         posizioni = [int(c.posizione) for c in ordered if c.posizione.isdigit()]
@@ -780,7 +783,7 @@ def analizza_cavallo(scheda: SchedaCavallo) -> str:
         lines.append("Nessuna corsa valida: trend fantino/quota non disponibile.")
 
     lines.append("")
-    lines.append("— Sintesi pronostico —")
+    lines.append("â€” Sintesi pronostico â€”")
     if not scheda.corse and not scheda.flatsix:
         lines.append("Dati insufficienti per una valutazione affidabile.")
     else:
@@ -924,7 +927,7 @@ def analizza_corsa_completa(concorrenti: list[tuple[int, SchedaCavallo]]) -> str
         _ranking_linee(
             metriche,
             lambda m: m.flatsix_media_recente,
-            "— Classifica FlatSix (media ultime cifre)",
+            "â€” Classifica FlatSix (media ultime cifre)",
             lower_is_better=True,
         )
     )
@@ -933,7 +936,7 @@ def analizza_corsa_completa(concorrenti: list[tuple[int, SchedaCavallo]]) -> str
         _ranking_linee(
             metriche,
             lambda m: m.ultima_quota,
-            "— Classifica quote (ultima uscita)",
+            "â€” Classifica quote (ultima uscita)",
             lower_is_better=True,
         )
     )
@@ -942,19 +945,19 @@ def analizza_corsa_completa(concorrenti: list[tuple[int, SchedaCavallo]]) -> str
         _ranking_linee(
             metriche,
             lambda m: m.media_posizioni_recenti,
-            "— Classifica prestazioni recenti (media posizioni)",
+            "â€” Classifica prestazioni recenti (media posizioni)",
             lower_is_better=True,
         )
     )
     lines.append("")
-    lines.append("— Classifica composita (pronostico corsa) —")
+    lines.append("â€” Classifica composita (pronostico corsa) â€”")
     composite_sorted = sorted(
         metriche, key=lambda m: m.punteggio_composito, reverse=True
     )
     for i, m in enumerate(composite_sorted, start=1):
         note = " (dati parziali)" if m.dati_parziali else ""
         lines.append(
-            f"  {i}. {m.nome} [partente n. {m.numero_partente}] — "
+            f"  {i}. {m.nome} [partente n. {m.numero_partente}] â€” "
             f"punteggio {_fmt_opt_float(m.punteggio_composito)}{note}"
         )
     if composite_sorted:
@@ -962,7 +965,7 @@ def analizza_corsa_completa(concorrenti: list[tuple[int, SchedaCavallo]]) -> str
         lines.append("")
         lines.append(
             f"Pronostico sintetico: {top.nome} (partente n. {top.numero_partente}) "
-            f"in testa — id {top.cavallo_id}. Solo dati reali salvati in database."
+            f"in testa â€” id {top.cavallo_id}. Solo dati reali salvati in database."
         )
     return "\n".join(lines)
 
@@ -974,7 +977,7 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, col_def: s
 
 
 def init_database(path: str = DB_PATH) -> None:
-    with sqlite3.connect(path) as conn:
+    with sqlite3.connect(path, timeout=10) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS cavalli (
@@ -1040,7 +1043,7 @@ def salva_scheda(
     if not scheda.corse and not scheda.eta and not scheda.flatsix:
         raise ValueError("Scheda priva di dati salvabili.")
 
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=10) as conn:
         cur = conn.execute(
             """
             INSERT INTO cavalli (
@@ -1094,7 +1097,7 @@ def salva_scheda(
 
 
 def carica_scheda_da_id(cavallo_id: int, db_path: str = DB_PATH) -> SchedaCavallo | None:
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=10) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             """
@@ -1153,7 +1156,7 @@ def carica_cavalli_sessione_da_db(
     sessione_corsa: str,
     db_path: str = DB_PATH,
 ) -> list[tuple[int, SchedaCavallo]]:
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=10) as conn:
         ids = [
             int(r[0])
             for r in conn.execute(
@@ -1176,7 +1179,7 @@ def carica_cavalli_sessione_da_db(
 class IppicaApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Scheda ippica — inserimento e analisi")
+        self.title("Scheda ippica â€” inserimento e analisi")
         self.minsize(780, 620)
         self.sessione_corsa_id = str(uuid.uuid4())
         init_database()
@@ -1194,7 +1197,7 @@ class IppicaApp(tk.Tk):
         ttk.Label(
             main,
             text="Incolla la scheda (note, anagrafica, FlatSix/TotalSix, ultime corse). "
-            "Il numero partente è assegnato automaticamente.",
+            "Il numero partente Ã¨ assegnato automaticamente.",
         ).grid(row=0, column=0, sticky=tk.W, **pad)
 
         self.prossimo_numero_var = tk.StringVar()
@@ -1275,8 +1278,8 @@ class IppicaApp(tk.Tk):
             f"n.{s.numero_partente}" for _, s in concorrenti[:8]
         )
         if n > 8:
-            etichette += ", …"
-        extra = f" — {etichette}" if etichette else ""
+            etichette += ", â€¦"
+        extra = f" â€” {etichette}" if etichette else ""
         self.corsa_session_var.set(
             f"Cavalli salvati in sessione corsa: {n}{extra} "
             f"(minimo 2 per analisi comparativa)."
@@ -1294,7 +1297,7 @@ class IppicaApp(tk.Tk):
         self._aggiorna_sessione_corsa_label()
         self._aggiorna_prossimo_numero_label()
         self.status_var.set(
-            "Nuova sessione corsa: il prossimo salvataggio sarà Cavallo n. 1."
+            "Nuova sessione corsa: il prossimo salvataggio sarÃ  Cavallo n. 1."
         )
 
     def _on_analisi_corsa(self) -> None:
@@ -1328,7 +1331,7 @@ class IppicaApp(tk.Tk):
 
         missing = []
         if not scheda.eta:
-            missing.append("età")
+            missing.append("etÃ ")
         if not scheda.flatsix:
             missing.append("FlatSix")
         if not scheda.corse:
@@ -1337,7 +1340,7 @@ class IppicaApp(tk.Tk):
         report = analizza_cavallo(scheda)
         if missing:
             report += (
-                "\n\n— Campi mancanti —\n"
+                "\n\nâ€” Campi mancanti â€”\n"
                 + ", ".join(missing)
                 + " non estratti: sezioni correlate limitate o assenti."
             )
@@ -1356,14 +1359,14 @@ class IppicaApp(tk.Tk):
         self._aggiorna_sessione_corsa_label()
         n_sessione = len(carica_cavalli_sessione_da_db(self.sessione_corsa_id))
         report += (
-            f"\n\n— Database —\nSalvato {scheda.nome} (partente n. {scheda.numero_partente}), "
+            f"\n\nâ€” Database â€”\nSalvato {scheda.nome} (partente n. {scheda.numero_partente}), "
             f"id={cavallo_id}, {len(scheda.corse)} corse storiche, "
             f"sessione corsa: {n_sessione} concorrenti."
         )
         self._set_report(report)
         self._aggiorna_prossimo_numero_label()
         self.status_var.set(
-            f"Salvato {scheda.nome} — sessione corsa: {n_sessione} cavalli."
+            f"Salvato {scheda.nome} â€” sessione corsa: {n_sessione} cavalli."
         )
 
 
