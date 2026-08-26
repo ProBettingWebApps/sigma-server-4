@@ -36,16 +36,21 @@ from ippica_inserimento import (
 )
 
 
-# Sostituzione password semplificata
-if "password_correct" not in st.session_state:
-    st.session_state["password_correct"] = False
+if "autenticato" not in st.session_state:
+    st.session_state["autenticato"] = False
 
-if not st.session_state["password_correct"]:
-    st.markdown("### ðŸ”’ Area Privata - Sigma 4.0")
-    password = st.text_input("Inserisci Password", type="password")
-    if st.button("ðŸš€ ACCEDI ALL'AREA PRO (V10.25 FULL-PRO-TV)"):
-        if password == "sigma4": # Or whatever password is expected, let me just assume a placeholder or check if there was a specific password. The user said "Ripristina il login con st.text_input("Inserisci Password", type="password"). Solo se la password Ã¨ corretta...". I will use standard logic. Wait, let me read app_web.py to see if there's a password checking function.
-            pass
+if not st.session_state["autenticato"]:
+    st.title("🔒 Area Privata - Sigma 4.0")
+    pwd_inserita = st.text_input("Inserisci Password", type="password")
+    
+    if st.button("🚀 ACCEDI ALL'AREA PRO (V10.25 FULL-PRO-TV)"):
+        if pwd_inserita == "horse2026":
+            st.session_state["autenticato"] = True
+            st.rerun()
+        else:
+            st.error("Password errata. Riprova.")
+    
+    # Questo comando ferma l'esecuzione del resto della pagina finché non si è dentro
     st.stop()
 
 st.set_page_config(
