@@ -4,6 +4,14 @@ Web app locale Streamlit con Modulo Elastico 4.0.
 
 from __future__ import annotations
 
+import os
+import time
+os.environ['TZ'] = 'Europe/Rome'
+try:
+    time.tzset()
+except AttributeError:
+    pass
+
 import html
 import json
 import math
