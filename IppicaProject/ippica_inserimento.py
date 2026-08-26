@@ -121,7 +121,7 @@ def _valida_inizio_blocco_partente(linee: list[str], indice: int) -> bool:
     if pos >= len(linee):
         return False
     candidato = linee[pos].strip()
-    if not re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]{2,}", candidato):
+    if not re.search(r"[\w]{2,}", candidato):
         return False
     if re.match(r"(?i)^rating\b", candidato):
         return False
@@ -165,7 +165,7 @@ def _estrai_nome_inizio_blocco(linee: list[str]) -> str | None:
     if indice >= len(linee):
         return None
     nome = linee[indice].strip()
-    if not nome or not re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]{2,}", nome):
+    if not nome or not re.search(r"[\w]{2,}", nome):
         return None
     return nome
 
@@ -193,7 +193,7 @@ def _estrai_fantino_dopo_eta(linee: list[str], indice_eta: int) -> str | None:
         if NUMERO_PARTENTE_ISOLATO_RE.fullmatch(testo):
             break
         fantino = _normalizza_fantino_estratto(testo)
-        if fantino and re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿.]", fantino):
+        if fantino and re.search(r"[\w.]", fantino):
             return fantino
     return None
 
@@ -241,7 +241,7 @@ def _estrai_decimali_coda_blocco(linee: list[str]) -> list[float]:
             break
         if re.search(r"(?i)\bkg\b", testo):
             break
-        if re.search(r"[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]", testo):
+        if re.search(r"[\w]", testo):
             if raccolti:
                 break
             continue
