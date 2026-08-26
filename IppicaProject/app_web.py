@@ -6871,6 +6871,8 @@ def _render_intestazione_corsa_editor() -> None:
     ].fillna("")
 
 
+# Rimosso vecchio duplicato funzione
+
 def _render_v1025_header(numero_partenti: int) -> None:
     _ = numero_partenti
     orario_attuale = html.escape(datetime.now(tz_italy).strftime("%d/%m/%Y | %H:%M"))
@@ -7013,7 +7015,28 @@ def _render_v1025_header(numero_partenti: int) -> None:
             """
         )
         with st.expander("💬 CLICCA QUI PER APRIRE LA CHAT DIRETTA", expanded=False):
-            _render_live_chat_contenuto()
+            import random
+            
+            if "chat_user" not in st.session_state:
+                st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
+                
+            with sqlite3.connect("ippica_dati.db") as conn:
+                messaggi = conn.execute(
+                    "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
+                ).fetchall()
+                
+                with st.container(height=300):
+                    for utente, msg, ts in reversed(messaggi):
+                        with st.chat_message(utente):
+                            st.write(f"**{utente}** <small>({ts})</small>: {msg}")
+                
+                if prompt := st.chat_input("Scrivi un messaggio..."):
+                    conn.execute(
+                        "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
+                        (st.session_state.chat_user, prompt)
+                    )
+                    conn.commit()
+                    st.rerun()
 
     with col_orologio:
         _st_html(
@@ -7178,29 +7201,4 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-
-def _render_live_chat_contenuto():
-    import random
-    import sqlite3
-    
-    if "chat_user" not in st.session_state:
-        st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
-        
-    with sqlite3.connect("ippica_dati.db") as conn:
-        messaggi = conn.execute(
-            "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
-        ).fetchall()
-        
-        with st.container(height=300):
-            for utente, msg, ts in reversed(messaggi):
-                with st.chat_message(utente):
-                    st.write(f"**{utente}** <small>({ts})</small>: {msg}")
-        
-        if prompt := st.chat_input("Scrivi un messaggio..."):
-            conn.execute(
-                "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
-                (st.session_state.chat_user, prompt)
-            )
-            conn.commit()
-            st.rerun()
 
