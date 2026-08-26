@@ -37,6 +37,8 @@ from ippica_inserimento import (
     init_database,
 )
 
+def ora_italiana():
+    return datetime.now(pytz.timezone('Europe/Rome'))
 
 # Funzione di protezione password
 def check_password():
@@ -782,7 +784,7 @@ def _riscrivi_corsa_da_memoria(
                     scheda.proprietario,
                     sessione_corsa,
                     scheda.numero_partente,
-                    datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds"),
+                    ora_italiana().isoformat(timespec="seconds"),
                 ),
             )
             nuovo_id = int(cur.lastrowid)
@@ -922,7 +924,7 @@ def _salva_righe_palinsesto(
     sessione_corsa: str,
     righe: pd.DataFrame,
 ) -> None:
-    adesso = datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds")
+    adesso = ora_italiana().isoformat(timespec="seconds")
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             "DELETE FROM palinsesto_sigma WHERE sessione_corsa = ?",
@@ -3103,7 +3105,7 @@ def _costruisci_pronostico_generato(classifica: pd.DataFrame) -> dict[str, objec
     ].reset_index(drop=True)
     sel = _seleziona_quattro_target_sigma(valutabili)
     return {
-        "generato_il": datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds"),
+        "generato_il": ora_italiana().isoformat(timespec="seconds"),
         "top4": sel["top4"].copy(),
         "vincenti": sel["vincenti"].copy(),
         "piazzato": sel["piazzato"].copy(),
@@ -3336,7 +3338,7 @@ def _archivia_gara_in_memoria(
 ) -> str:
     """Salvataggio istantaneo dopo calcolo Distribuzione Sigma."""
     gara_id = str(uuid.uuid4())
-    salvato_il = datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds")
+    salvato_il = ora_italiana().isoformat(timespec="seconds")
     stats_mercato = mercato or _statistiche_mercato_da_dataframe(partenti)
     pronostico_generato = _costruisci_pronostico_generato(classifica)
     record = {
@@ -6434,7 +6436,7 @@ def _salva_ordine_arrivo_gara(ordine_arrivo: str, gara: dict) -> None:
         )
 
     gara_id = str(gara["id"])
-    timestamp = datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds")
+    timestamp = ora_italiana().isoformat(timespec="seconds")
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -6899,7 +6901,7 @@ def _render_intestazione_corsa_editor() -> None:
 
 def _render_v1025_header(numero_partenti: int) -> None:
     _ = numero_partenti
-    orario_attuale = html.escape(datetime.now(pytz.timezone('Europe/Rome')).strftime("%d/%m/%Y | %H:%M"))
+    orario_attuale = html.escape(ora_italiana().strftime("%d/%m/%Y | %H:%M"))
 
     _st_html(
         """
