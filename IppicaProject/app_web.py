@@ -74,6 +74,15 @@ st.markdown("""
     div[data-baseweb="textarea"] {
         background-color: #2b2b2b !important;
     }
+    textarea::placeholder {
+        color: #aaaaaa !important;
+        -webkit-text-fill-color: #aaaaaa !important;
+        opacity: 1 !important;
+    }
+    ::-webkit-input-placeholder {
+        color: #aaaaaa !important;
+        -webkit-text-fill-color: #aaaaaa !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -5701,6 +5710,7 @@ def _render_inserimento_dati_gara() -> None:
             "automaticamente in memoria e SQLite."
         )
         with st.form("form_dati_gara", clear_on_submit=True):
+            st.info("👇 📝 INCOLLA QUI SOTTO I DATI GREZZI DELLE CORSE 👇")
             testo_grezzo = st.text_area("Dati Corse", height=300, placeholder="📝 Incolla qui il testo puro dei partenti...")
             elabora = st.form_submit_button(
                 "Elabora Dati Gara",
