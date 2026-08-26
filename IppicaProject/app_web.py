@@ -13,6 +13,13 @@ import statistics
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
+try:
+    tz_italy = ZoneInfo("Europe/Rome")
+except Exception:
+    from datetime import timezone, timedelta
+    tz_italy = timezone(timedelta(hours=2))
+
 import pandas as pd
 import io
 import plotly.express as px
@@ -6879,7 +6886,7 @@ def _render_intestazione_corsa_editor() -> None:
 
 def _render_v1025_header(numero_partenti: int) -> None:
     _ = numero_partenti
-    orario_attuale = html.escape(datetime.now().strftime("%d/%m/%Y | %H:%M"))
+    orario_attuale = html.escape(datetime.now(tz_italy).strftime("%d/%m/%Y | %H:%M"))
 
     _st_html(
         """
@@ -7171,6 +7178,8 @@ def main() -> None:
     classifica = _ensure_colonne_distribuzione_sigma(classifica)
     st.session_state.sigma_value_bet = classifica
     _render_dashboard_sigma_value_bet(classifica, intestazione)
+    _render_live_chat()
+
     st.divider()
     _render_aggiorna_esito_gara(gara)
 
@@ -7178,3 +7187,31 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def _render_live_chat() -> None:
+    import random
+    import sqlite3
+    
+    with st.expander("💬 Chat Diretta TV", expanded=False):
+        if "chat_user" not in st.session_state:
+            st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
+            
+        with sqlite3.connect("ippica_dati.db") as conn:
+            # Salva messaggio
+            if prompt := st.chat_input("Scrivi un messaggio..."):
+                conn.execute(
+                    "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
+                    (st.session_state.chat_user, prompt)
+                )
+                conn.commit()
+                st.rerun()
+            
+            # Mostra ultimi 50
+            messaggi = conn.execute(
+                "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
+            ).fetchall()
+            
+            for utente, msg, ts in reversed(messaggi):
+                with st.chat_message(utente):
+                    st.write(f"**{utente}** <small>({ts})</small>: {msg}")
