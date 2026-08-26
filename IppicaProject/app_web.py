@@ -5695,6 +5695,7 @@ def _render_inserimento_dati_gara() -> None:
             "automaticamente in memoria e SQLite."
         )
         with st.form("form_dati_gara", clear_on_submit=True):
+            st.info("💡 Suggerimento: se hai problemi a incollare, assicurati di copiare solo il testo (niente immagini, tabelle o formattazioni strane).")
             testo_grezzo = st.text_area(
                 "Incolla qui i dati grezzi dei cavalli",
                 height=260,
@@ -5717,35 +5718,40 @@ def _render_inserimento_dati_gara() -> None:
             if not testo_grezzo.strip():
                 st.warning("Assenza di dati - Nessun testo grezzo da elaborare")
             else:
-                intestazione, tabella = parse_gara_completa(testo_grezzo)
-                if tabella.empty:
-                    st.warning(
-                        "Assenza di dati - Nessun cavallo riconosciuto "
-                        "nel testo incollato"
-                    )
-                else:
-                    for avviso in _avvisi_dati_statistici_partenti_mancanti(tabella):
-                        st.warning(f"Assenza di dati - {avviso}")
-                    mercato = _statistiche_mercato_da_testo(testo_grezzo)
-                    classifica = calcola_value_bet(tabella)
-                    classifica = _ensure_colonne_distribuzione_sigma(classifica)
-                    if (
-                        "Sigma Value Score" in classifica.columns
-                        and classifica["Sigma Value Score"].isna().all()
-                    ):
+                try:
+                    testo_pulito = testo_grezzo.strip().replace('\x00', '')
+                    intestazione, tabella = parse_gara_completa(testo_pulito)
+                    if tabella.empty:
                         st.warning(
-                            "Assenza di dati - Regression, Quanta o Rating "
-                            "insufficienti per calcolare la Distribuzione Sigma."
+                            "Assenza di dati - Nessun cavallo riconosciuto "
+                            "nel testo incollato"
                         )
-                    _archivia_gara_in_memoria(
-                        intestazione, tabella, classifica, mercato=mercato
-                    )
-                    st.session_state.dashboard_live_vuota = False
-                    st.session_state.messaggio_flash = (
-                        "Gara salvata istantaneamente con Distribuzione Sigma "
-                        f"calcolata ({len(tabella)} partenti)."
-                    )
-                    st.rerun()
+                    else:
+                        for avviso in _avvisi_dati_statistici_partenti_mancanti(tabella):
+                            st.warning(f"Assenza di dati - {avviso}")
+                        mercato = _statistiche_mercato_da_testo(testo_pulito)
+                        classifica = calcola_value_bet(tabella)
+                        classifica = _ensure_colonne_distribuzione_sigma(classifica)
+                        if (
+                            "Sigma Value Score" in classifica.columns
+                            and classifica["Sigma Value Score"].isna().all()
+                        ):
+                            st.warning(
+                                "Assenza di dati - Regression, Quanta o Rating "
+                                "insufficienti per calcolare la Distribuzione Sigma."
+                            )
+                        _archivia_gara_in_memoria(
+                            intestazione, tabella, classifica, mercato=mercato
+                        )
+                        st.session_state.dashboard_live_vuota = False
+                        st.session_state.messaggio_flash = (
+                            "Gara salvata istantaneamente con Distribuzione Sigma "
+                            f"calcolata ({len(tabella)} partenti)."
+                        )
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"⚠️ Errore di lettura dati. Controlla il formato del testo incollato. Dettaglio tecnico: {e}")
+                    st.stop()
 
 
 def _nomi_cavalli_da_dataframe(df: pd.DataFrame) -> list[str]:
