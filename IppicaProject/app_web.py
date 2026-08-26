@@ -72,6 +72,11 @@ st.markdown(
     .streamlit-expanderHeader {
         color: #F3F4F6 !important;
     }
+    
+    /* Forza testo nero per input della chat */
+    div[data-testid="stChatInput"] textarea {
+        color: #141518 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -7014,39 +7019,47 @@ def _render_v1025_header(numero_partenti: int) -> None:
             </p>
             """
         )
-        with st.expander("💬 CLICCA QUI PER APRIRE LA CHAT DIRETTA", expanded=False):
-            import random
-            
-            if "chat_user" not in st.session_state:
-                st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
+        if "mostra_chat" not in st.session_state:
+            st.session_state["mostra_chat"] = False
+
+        if st.button("💬 APRI / CHIUDI CHAT DIRETTA", type="primary", use_container_width=False):
+            st.session_state["mostra_chat"] = not st.session_state["mostra_chat"]
+            st.rerun()
+
+        if st.session_state["mostra_chat"]:
+            with st.container():
+                import random
                 
-            with sqlite3.connect("ippica_dati.db") as conn:
-                conn.execute('''
-                    CREATE TABLE IF NOT EXISTS chat_globale (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        utente TEXT,
-                        messaggio TEXT,
-                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                conn.commit()
-                
-                messaggi = conn.execute(
-                    "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
-                ).fetchall()
-                
-                with st.container(height=300):
-                    for utente, msg, ts in reversed(messaggi):
-                        with st.chat_message(utente):
-                            st.write(f"**{utente}** <small>({ts})</small>: {msg}")
-                
-                if prompt := st.chat_input("Scrivi un messaggio..."):
-                    conn.execute(
-                        "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
-                        (st.session_state.chat_user, prompt)
-                    )
+                if "chat_user" not in st.session_state:
+                    st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
+                    
+                with sqlite3.connect("ippica_dati.db") as conn:
+                    conn.execute('''
+                        CREATE TABLE IF NOT EXISTS chat_globale (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            utente TEXT,
+                            messaggio TEXT,
+                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                        )
+                    ''')
                     conn.commit()
-                    st.rerun()
+                    
+                    messaggi = conn.execute(
+                        "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
+                    ).fetchall()
+                    
+                    with st.container(height=300):
+                        for utente, msg, ts in reversed(messaggi):
+                            with st.chat_message(utente):
+                                st.markdown(f"**{utente}** *({ts})*: {msg}")
+                    
+                    if prompt := st.chat_input("Scrivi un messaggio..."):
+                        conn.execute(
+                            "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
+                            (st.session_state.chat_user, prompt)
+                        )
+                        conn.commit()
+                        st.rerun()
 
     with col_orologio:
         _st_html(
