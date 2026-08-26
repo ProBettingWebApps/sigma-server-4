@@ -59,6 +59,17 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+st.markdown("""
+    <style>
+    /* Forza il colore del testo e dello sfondo nel box di inserimento */
+    .stTextArea textarea {
+        color: #ffffff !important;
+        background-color: #1a1a1a !important;
+        border: 1px solid #4CAF50 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.markdown(
     """
     <style>
@@ -1159,8 +1170,14 @@ def _normalizza_dataframe_partenti(df: pd.DataFrame) -> pd.DataFrame:
             testo = str(valore or "").strip()
             if not testo:
                 return testo
+            
+            # Se la stringa contiene già il formato col numero, puliscila ed esci
             if " - " in testo:
-                return testo
+                # Controlla se la parte prima del trattino è un numero
+                parti = testo.split(" - ", 1)
+                if parti[0].strip().isdigit():
+                    return testo
+
             try:
                 num = int(numero_riga)
             except (TypeError, ValueError):
@@ -4016,7 +4033,9 @@ def _render_griglia_pronostico_target(
     if mostra_barre_densita and not targets_df.empty:
         st.markdown("### Densità Sigma e Field Tilt — Target Operativi (Top 4)")
         for posizione, (_idx, riga) in enumerate(targets_df.iterrows(), start=1):
-            etichetta = str(riga.get("Nome") or "N/D").strip()
+            numero = str(riga.get("N°", riga.get("Numero", ""))).strip()
+            nome = str(riga.get("Nome", "N/D")).strip()
+            etichetta = f"{numero} - {nome}" if numero else nome
             ruolo = str(riga.get("Consiglio_Operativo") or "").strip()
             titolo = f"{posizione}° · {etichetta}"
             if ruolo:
