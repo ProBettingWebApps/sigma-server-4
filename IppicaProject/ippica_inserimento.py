@@ -4,7 +4,7 @@ I partenti sono numerati in ordine di inserimento (Cavallo n. 1, n. 2, …).
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import re
 import sqlite3
@@ -369,7 +369,7 @@ class SchedaCavallo:
     flatsix: str
     genealogia: str
     proprietario: str
-    corse: list[Corsa] = field(default_factory=list)
+    corse: list['Corsa'] = field(default_factory=list)
     righe_corse_non_parse: list[str] = field(default_factory=list)
 
 
