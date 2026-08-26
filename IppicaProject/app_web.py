@@ -61,11 +61,14 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Forza il colore del testo e dello sfondo nel box di inserimento */
+    /* Forza lo sfondo scuro e il testo bianco per la text area di Streamlit */
+    div[data-baseweb="base-input"] > textarea,
+    div[data-baseweb="textarea"] textarea,
     .stTextArea textarea {
-        color: #ffffff !important;
-        background-color: #1a1a1a !important;
-        border: 1px solid #4CAF50 !important;
+        background-color: #1E1E1E !important;
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        border: 2px solid #4CAF50 !important;
     }
     </style>
 """, unsafe_allow_html=True)
