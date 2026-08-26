@@ -36,10 +36,19 @@ from ippica_inserimento import (
 )
 
 
+from streamlit_cookies_controller import CookieController
+
 # Funzione di protezione password
 def check_password():
+    controller = CookieController()
+    
     if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
+        # Controlla cookie
+        auth_cookie = controller.get("sigma_auth")
+        if auth_cookie == "verified":
+            st.session_state.authenticated = True
+        else:
+            st.session_state.authenticated = False
 
     if st.session_state.authenticated:
         return True
@@ -50,6 +59,7 @@ def check_password():
     if st.button("Accedi"):
         if pwd_input == "horse2026":
             st.session_state.authenticated = True
+            controller.set("sigma_auth", "verified", max_age=30*24*60*60)
             st.rerun()
         else:
             st.error("Password errata. Riprova.")
@@ -7193,25 +7203,29 @@ def _render_live_chat() -> None:
     import random
     import sqlite3
     
-    with st.expander("💬 Chat Diretta TV", expanded=False):
-        if "chat_user" not in st.session_state:
-            st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
-            
-        with sqlite3.connect("ippica_dati.db") as conn:
-            # Salva messaggio
-            if prompt := st.chat_input("Scrivi un messaggio..."):
-                conn.execute(
-                    "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
-                    (st.session_state.chat_user, prompt)
-                )
-                conn.commit()
-                st.rerun()
-            
-            # Mostra ultimi 50
-            messaggi = conn.execute(
-                "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
-            ).fetchall()
-            
+    st.subheader("💬 Chat Diretta TV")
+    
+    if "chat_user" not in st.session_state:
+        st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
+        
+    with sqlite3.connect("ippica_dati.db") as conn:
+        # Mostra ultimi 50
+        messaggi = conn.execute(
+            "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
+        ).fetchall()
+        
+        # Mostra messaggi in un contenitore scrollabile limitato in altezza
+        with st.container(height=300):
             for utente, msg, ts in reversed(messaggi):
                 with st.chat_message(utente):
                     st.write(f"**{utente}** <small>({ts})</small>: {msg}")
+        
+        # Input chat sempre visibile
+        if prompt := st.chat_input("Scrivi un messaggio..."):
+            conn.execute(
+                "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
+                (st.session_state.chat_user, prompt)
+            )
+            conn.commit()
+            st.rerun()
+
