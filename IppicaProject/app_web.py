@@ -7021,6 +7021,16 @@ def _render_v1025_header(numero_partenti: int) -> None:
                 st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
                 
             with sqlite3.connect("ippica_dati.db") as conn:
+                conn.execute('''
+                    CREATE TABLE IF NOT EXISTS chat_globale (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        utente TEXT,
+                        messaggio TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                conn.commit()
+                
                 messaggi = conn.execute(
                     "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
                 ).fetchall()
