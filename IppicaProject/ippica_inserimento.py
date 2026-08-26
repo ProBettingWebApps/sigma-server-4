@@ -993,16 +993,6 @@ def init_database(path: str = DB_PATH) -> None:
             )
             """
         )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS chat_globale (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                utente TEXT NOT NULL,
-                messaggio TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
 
         conn.execute(
             """
