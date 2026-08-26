@@ -4,6 +4,7 @@ I partenti sono numerati in ordine di inserimento (Cavallo n. 1, n. 2, …).
 """
 
 from __future__ import annotations
+from dataclasses import dataclass
 
 import re
 import sqlite3
