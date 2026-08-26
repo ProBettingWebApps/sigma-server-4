@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import pytz
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -1050,7 +1051,7 @@ def salva_scheda(
                 scheda.proprietario,
                 sessione_corsa,
                 scheda.numero_partente,
-                datetime.now().isoformat(timespec="seconds"),
+                datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds"),
             ),
         )
         cavallo_id = int(cur.lastrowid)
