@@ -11,6 +11,7 @@ import re
 import sqlite3
 import statistics
 import uuid
+import pytz
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 import pandas as pd
@@ -61,14 +62,17 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Forza lo sfondo scuro e il testo bianco per la text area di Streamlit */
-    div[data-baseweb="base-input"] > textarea,
-    div[data-baseweb="textarea"] textarea,
-    .stTextArea textarea {
-        background-color: #1E1E1E !important;
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-        border: 2px solid #4CAF50 !important;
+    /* Forza bruta per tutte le aree di testo */
+    textarea {
+        background-color: #2b2b2b !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+    div[data-baseweb="base-input"] {
+        background-color: #2b2b2b !important;
+    }
+    div[data-baseweb="textarea"] {
+        background-color: #2b2b2b !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -761,7 +765,7 @@ def _riscrivi_corsa_da_memoria(
                     scheda.proprietario,
                     sessione_corsa,
                     scheda.numero_partente,
-                    datetime.now().isoformat(timespec="seconds"),
+                    datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds"),
                 ),
             )
             nuovo_id = int(cur.lastrowid)
@@ -901,7 +905,7 @@ def _salva_righe_palinsesto(
     sessione_corsa: str,
     righe: pd.DataFrame,
 ) -> None:
-    adesso = datetime.now().isoformat(timespec="seconds")
+    adesso = datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds")
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             "DELETE FROM palinsesto_sigma WHERE sessione_corsa = ?",
@@ -3082,7 +3086,7 @@ def _costruisci_pronostico_generato(classifica: pd.DataFrame) -> dict[str, objec
     ].reset_index(drop=True)
     sel = _seleziona_quattro_target_sigma(valutabili)
     return {
-        "generato_il": datetime.now().isoformat(timespec="seconds"),
+        "generato_il": datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds"),
         "top4": sel["top4"].copy(),
         "vincenti": sel["vincenti"].copy(),
         "piazzato": sel["piazzato"].copy(),
@@ -3315,7 +3319,7 @@ def _archivia_gara_in_memoria(
 ) -> str:
     """Salvataggio istantaneo dopo calcolo Distribuzione Sigma."""
     gara_id = str(uuid.uuid4())
-    salvato_il = datetime.now().isoformat(timespec="seconds")
+    salvato_il = datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds")
     stats_mercato = mercato or _statistiche_mercato_da_dataframe(partenti)
     pronostico_generato = _costruisci_pronostico_generato(classifica)
     record = {
@@ -3336,9 +3340,10 @@ def _archivia_gara_in_memoria(
     st.session_state.dati_gara_dataframe = partenti.copy()
     st.session_state.sigma_value_bet = classifica.copy()
     st.session_state.intestazione_gara_corrente = dict(intestazione)
-    _salva_gara_sqlite(
-        gara_id, intestazione, partenti, classifica, pronostico_generato, salvato_il
-    )
+    # _salva_gara_sqlite disattivato per modalità usa e getta
+    # _salva_gara_sqlite(
+    #     gara_id, intestazione, partenti, classifica, pronostico_generato, salvato_il
+    # )
     return gara_id
 
 
@@ -4520,39 +4525,17 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _render_selettore_gara_salvata() -> dict | None:
+    # Modalità usa e getta - niente storico selezionabile, ritorniamo solo l'ultima gara calcolata
     archivio = list(st.session_state.get("database_corse", []))
     if not archivio:
-        st.warning("Assenza di dati - Inserire partenti")
         return None
-
-    opzioni = {gara["id"]: gara["etichetta"] for gara in archivio}
-    ids = list(opzioni.keys())
-    placeholder = "__nuova_corsa__"
-    select_ids = [placeholder] + ids
-
-    if st.session_state.get("dashboard_live_vuota"):
-        if st.session_state.get("gara_selezionata_id") not in opzioni:
-            st.session_state.gara_selezionata_id = placeholder
-    elif st.session_state.get("gara_selezionata_id") not in opzioni:
-        st.session_state.gara_selezionata_id = ids[-1]
-
-    scelta = st.selectbox(
-        "Seleziona Gara Salvata",
-        options=select_ids,
-        format_func=lambda gara_id: (
-            "— In attesa nuova corsa —"
-            if gara_id == placeholder
-            else opzioni[gara_id]
-        ),
-        key="gara_selezionata_id",
-    )
-    if scelta == placeholder:
-        return None
-
+    
+    gara = archivio[-1]
     st.session_state.dashboard_live_vuota = False
-    gara = next(item for item in archivio if item["id"] == scelta)
     st.session_state.dati_gara_dataframe = gara["partenti"]
     st.session_state.intestazione_gara_corrente = dict(gara["intestazione"])
+    st.session_state.sigma_value_bet = gara["classifica"]
+    return gara
     classifica_salvata = gara.get("classifica")
     if isinstance(classifica_salvata, pd.DataFrame) and not classifica_salvata.empty:
         st.session_state.sigma_value_bet = classifica_salvata.copy()
@@ -5718,11 +5701,7 @@ def _render_inserimento_dati_gara() -> None:
             "automaticamente in memoria e SQLite."
         )
         with st.form("form_dati_gara", clear_on_submit=True):
-            testo_grezzo = st.text_area(
-                "Incolla qui i dati grezzi dei cavalli",
-                height=260,
-                placeholder="inserisci qui i dati",
-            )
+            testo_grezzo = st.text_area("Dati Corse", height=300, placeholder="📝 Incolla qui il testo puro dei partenti...")
             elabora = st.form_submit_button(
                 "Elabora Dati Gara",
                 type="primary",
@@ -6437,7 +6416,7 @@ def _salva_ordine_arrivo_gara(ordine_arrivo: str, gara: dict) -> None:
         )
 
     gara_id = str(gara["id"])
-    timestamp = datetime.now().isoformat(timespec="seconds")
+    timestamp = datetime.now(pytz.timezone('Europe/Rome')).isoformat(timespec="seconds")
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -6516,7 +6495,8 @@ def _init_session_state() -> None:
     if "dati_gara_dataframe" not in st.session_state:
         st.session_state.dati_gara_dataframe = _dataframe_dati_gara_vuoto()
     if "database_corse" not in st.session_state:
-        st.session_state.database_corse = _carica_archivio_gare_sqlite()
+        # Caricamento disattivato per modalità usa e getta
+        st.session_state.database_corse = []
     if "intestazione_gara_corrente" not in st.session_state:
         st.session_state.intestazione_gara_corrente = _intestazione_gara_vuota()
     if "gara_selezionata_id" not in st.session_state:
@@ -6901,7 +6881,7 @@ def _render_intestazione_corsa_editor() -> None:
 
 def _render_v1025_header(numero_partenti: int) -> None:
     _ = numero_partenti
-    orario_attuale = html.escape(datetime.now().strftime("%d/%m/%Y | %H:%M"))
+    orario_attuale = html.escape(datetime.now(pytz.timezone('Europe/Rome')).strftime("%d/%m/%Y | %H:%M"))
 
     _st_html(
         """
@@ -7160,14 +7140,13 @@ def main() -> None:
 
     st.divider()
     _render_inserimento_dati_gara()
-    _render_database_archivio_corse()
+    # _render_database_archivio_corse disattivato per modalità usa e getta
     st.divider()
 
     gara = _render_selettore_gara_salvata()
     if gara is None:
         if st.session_state.get("dashboard_live_vuota"):
             _render_attesa_nuova_corsa()
-        _render_pulsante_reset_archivio_corse()
         return
 
     intestazione = dict(gara.get("intestazione") or {})
