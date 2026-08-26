@@ -7011,16 +7011,10 @@ def _render_v1025_header(numero_partenti: int) -> None:
                 Console Premium: Regression · Quanta · Elastico su dati reali del parser
             </p>
             """
-                <div style="margin-top: 15px;">
-                    <details>
-                        <summary style="font-weight: bold; cursor: pointer; color: white; padding: 10px; border: 1px solid #444; border-radius: 5px;">💬 CLICCA QUI PER APRIRE LA CHAT DIRETTA</summary>
-                        <div style="padding: 10px; background-color: #1e2024; border-radius: 5px;">
-                            {_render_live_chat_contenuto()}
-                        </div>
-                    </details>
-                </div>
-
         )
+        with st.expander("💬 CLICCA QUI PER APRIRE LA CHAT DIRETTA", expanded=False):
+            _render_live_chat_contenuto()
+
     with col_orologio:
         _st_html(
             f"""
