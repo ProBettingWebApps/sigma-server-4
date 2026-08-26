@@ -36,38 +36,15 @@ from ippica_inserimento import (
 )
 
 
-from streamlit_cookies_controller import CookieController
+# Sostituzione password semplificata
+if "password_correct" not in st.session_state:
+    st.session_state["password_correct"] = False
 
-# Funzione di protezione password
-def check_password():
-    controller = CookieController()
-    
-    if "authenticated" not in st.session_state:
-        # Controlla cookie
-        auth_cookie = controller.get("sigma_auth")
-        if auth_cookie == "verified":
-            st.session_state.authenticated = True
-        else:
-            st.session_state.authenticated = False
-
-    if st.session_state.authenticated:
-        return True
-
-    st.markdown("### 🔒 Accesso Riservato — IPPICA STAR!")
-    pwd_input = st.text_input("Inserisci la Password di Accesso:", type="password")
-    
-    if st.button("Accedi"):
-        if pwd_input == "horse2026":
-            st.session_state.authenticated = True
-            controller.set("sigma_auth", "verified", max_age=30*24*60*60)
-            st.rerun()
-        else:
-            st.error("Password errata. Riprova.")
-    
-    return False
-
-# Blocca l'esecuzione se non autenticato
-if not check_password():
+if not st.session_state["password_correct"]:
+    st.markdown("### 🔒 Area Privata - Sigma 4.0")
+    if st.button("🚀 ACCEDI ALL'AREA PRO (V10.25 FULL-PRO-TV)"):
+        st.session_state["password_correct"] = True
+        st.rerun()
     st.stop()
 
 st.set_page_config(
@@ -7034,6 +7011,15 @@ def _render_v1025_header(numero_partenti: int) -> None:
                 Console Premium: Regression · Quanta · Elastico su dati reali del parser
             </p>
             """
+                <div style="margin-top: 15px;">
+                    <details>
+                        <summary style="font-weight: bold; cursor: pointer; color: white; padding: 10px; border: 1px solid #444; border-radius: 5px;">💬 CLICCA QUI PER APRIRE LA CHAT DIRETTA</summary>
+                        <div style="padding: 10px; background-color: #1e2024; border-radius: 5px;">
+                            {_render_live_chat_contenuto()}
+                        </div>
+                    </details>
+                </div>
+
         )
     with col_orologio:
         _st_html(
@@ -7188,7 +7174,7 @@ def main() -> None:
     classifica = _ensure_colonne_distribuzione_sigma(classifica)
     st.session_state.sigma_value_bet = classifica
     _render_dashboard_sigma_value_bet(classifica, intestazione)
-    _render_live_chat()
+# _render_live_chat()
 
     st.divider()
     _render_aggiorna_esito_gara(gara)
@@ -7199,28 +7185,23 @@ if __name__ == "__main__":
     main()
 
 
-def _render_live_chat() -> None:
+def _render_live_chat_contenuto():
     import random
     import sqlite3
-    
-    st.subheader("💬 Chat Diretta TV")
     
     if "chat_user" not in st.session_state:
         st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
         
     with sqlite3.connect("ippica_dati.db") as conn:
-        # Mostra ultimi 50
         messaggi = conn.execute(
             "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
         ).fetchall()
         
-        # Mostra messaggi in un contenitore scrollabile limitato in altezza
         with st.container(height=300):
             for utente, msg, ts in reversed(messaggi):
                 with st.chat_message(utente):
                     st.write(f"**{utente}** <small>({ts})</small>: {msg}")
         
-        # Input chat sempre visibile
         if prompt := st.chat_input("Scrivi un messaggio..."):
             conn.execute(
                 "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
