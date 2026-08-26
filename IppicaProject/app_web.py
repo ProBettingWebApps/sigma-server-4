@@ -78,11 +78,6 @@ st.markdown(
     .streamlit-expanderHeader {
         color: #F3F4F6 !important;
     }
-    
-    /* Forza testo nero per input della chat */
-    div[data-testid="stChatInput"] textarea {
-        color: #141518 !important;
-    }
     </style>
     """,
     unsafe_allow_html=True
@@ -5700,32 +5695,35 @@ def _render_inserimento_dati_gara() -> None:
             "Parse + calcolo Sigma istantaneo. La corsa viene salvata "
             "automaticamente in memoria e SQLite."
         )
-        with st.form("form_dati_gara", clear_on_submit=True):
-            st.info("ðŸ’¡ Suggerimento: se hai problemi a incollare, assicurati di copiare solo il testo (niente immagini, tabelle o formattazioni strane).")
-            testo_grezzo = st.text_area(
-                "Incolla qui i dati grezzi dei cavalli",
-                height=260,
-                placeholder="inserisci qui i dati",
-            )
-            elabora = st.form_submit_button(
-                "Elabora Dati Gara",
-                type="primary",
-                use_container_width=True,
-            )
+        with st.form("inserimento_partenti_form", clear_on_submit=False):
+            st.info("💡 Incolla qui il testo puro dei partenti. Nessuna formattazione.")
+            testo_incollato = st.text_area("Dati Corse", height=300)
+            invia_btn = st.form_submit_button("Analizza Dati 🚀", type="primary", use_container_width=True)
+
+        file_caricato = st.file_uploader("OPPURE carica un file .txt se il tuo browser blocca il copia-incolla", type=["txt"])
+        testo_da_elaborare = testo_incollato
+        if file_caricato is not None:
+            try:
+                testo_da_elaborare = file_caricato.getvalue().decode("utf-8")
+                if not testo_incollato.strip():
+                    invia_btn = True
+            except Exception:
+                st.error("Errore nella lettura del file. Assicurati sia in formato UTF-8.")
+
         reset = st.button(
-            "ðŸ”„ Reset / Nuova Corsa",
+            "🔄 Reset / Nuova Corsa",
             use_container_width=True,
             key="reset_nuova_corsa_dashboard",
         )
         if reset:
             _reset_dashboard_nuova_corsa()
             st.rerun()
-        if elabora:
-            if not testo_grezzo.strip():
+        if invia_btn:
+            if not testo_da_elaborare.strip():
                 st.warning("Assenza di dati - Nessun testo grezzo da elaborare")
             else:
                 try:
-                    testo_pulito = " ".join(testo_grezzo.split())
+                    testo_pulito = " ".join(testo_da_elaborare.split())
                     intestazione, tabella = parse_gara_completa(testo_pulito)
                     if tabella.empty:
                         st.warning(
@@ -7031,48 +7029,9 @@ def _render_v1025_header(numero_partenti: int) -> None:
             </p>
             """
         )
-        if "mostra_chat" not in st.session_state:
-            st.session_state["mostra_chat"] = False
-
-        if st.button("ðŸ’¬ APRI / CHIUDI CHAT DIRETTA", type="primary", use_container_width=False):
-            st.session_state["mostra_chat"] = not st.session_state["mostra_chat"]
-            st.rerun()
-
-        if st.session_state["mostra_chat"]:
-            with st.container():
-                import random
-                
-                if "chat_user" not in st.session_state:
-                    st.session_state.chat_user = f"Ospite-{random.randint(100, 999)}"
-                    
-                with sqlite3.connect("ippica_dati.db", timeout=10) as conn:
-                    conn.execute('''
-                        CREATE TABLE IF NOT EXISTS chat_globale (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            utente TEXT,
-                            messaggio TEXT,
-                            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                        )
-                    ''')
-                    conn.commit()
-                    
-                    messaggi = conn.execute(
-                        "SELECT utente, messaggio, timestamp FROM chat_globale ORDER BY id DESC LIMIT 50"
-                    ).fetchall()
-                    
-                    with st.container(height=300):
-                        for utente, msg, ts in reversed(messaggi):
-                            with st.chat_message(utente):
-                                st.markdown(f"**{utente}** *({ts})*: {msg}")
-                    
-                    if prompt := st.chat_input("Scrivi un messaggio..."):
-                        conn.execute(
-                            "INSERT INTO chat_globale (utente, messaggio) VALUES (?, ?)",
-                            (st.session_state.chat_user, prompt)
-                        )
-                        conn.commit()
-                        st.rerun()
-
+        if "mostra_chat" in st.session_state:
+            del st.session_state["mostra_chat"]
+        
     with col_orologio:
         _st_html(
             f"""
