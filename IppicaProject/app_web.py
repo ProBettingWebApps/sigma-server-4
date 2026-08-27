@@ -72,31 +72,22 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Forza bruta per tutte le aree di testo */
-    textarea {
-        background-color: #2b2b2b !important;
+    div[data-baseweb="textarea"] {
+        background-color: #1a1a1a !important;
+        border: 2px solid #4CAF50 !important;
+        border-radius: 8px !important;
+    }
+    textarea, .stTextArea textarea {
         color: #ffffff !important;
         -webkit-text-fill-color: #ffffff !important;
-    }
-    /* Sfondo scuro e testo bianco per la text area - Direttiva 3 */
-    .stTextArea textarea {
-        color: #ffffff !important;
         background-color: #1a1a1a !important;
-    }
-    div[data-baseweb="base-input"] {
-        background-color: #2b2b2b !important;
-    }
-    div[data-baseweb="textarea"] {
-        background-color: #2b2b2b !important;
+        font-family: monospace !important;
+        font-size: 14px !important;
     }
     textarea::placeholder {
-        color: #aaaaaa !important;
-        -webkit-text-fill-color: #aaaaaa !important;
+        color: #888888 !important;
+        -webkit-text-fill-color: #888888 !important;
         opacity: 1 !important;
-    }
-    ::-webkit-input-placeholder {
-        color: #aaaaaa !important;
-        -webkit-text-fill-color: #aaaaaa !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -1152,7 +1143,7 @@ def _riga_dati_gara_standard(
         "Ultimi Arrivi": ultimi,
         "Forma_Storica": forma,
         "Quote Valide": (
-            " | ".join(f"{float(q):.2f}" for q in quote_list) if quote_list else ""
+            " | ".join(f"{float(q):.2f}" for q in quote_list) if quote_list else "N/D"
         ),
     }
 
@@ -1168,8 +1159,11 @@ def _normalizza_dataframe_partenti(df: pd.DataFrame) -> pd.DataFrame:
     if "Quote Valide" not in lavoro.columns and "Quota" in lavoro.columns:
         quote_numeriche = pd.to_numeric(lavoro["Quota"], errors="coerce")
         lavoro["Quote Valide"] = quote_numeriche.apply(
-            lambda q: f"{float(q):.2f}" if pd.notna(q) else ""
+            lambda q: f"{float(q):.2f}" if pd.notna(q) else "N/D"
         )
+    
+    if "Quote Valide" in lavoro.columns:
+        lavoro["Quote Valide"] = lavoro["Quote Valide"].fillna("N/D").replace("", "N/D")
 
     for colonna in DATI_GARA_COLUMNS:
         if colonna not in lavoro.columns:
@@ -4200,7 +4194,7 @@ def _indice_confidenza_sigma_quote(quote: list[float]) -> float | None:
 
 def _parse_quote_valide_cella(valore: object) -> list[float]:
     testo = str(valore or "").strip()
-    if not testo or testo.lower() in {"nan", "none", "<na>"}:
+    if not testo or testo.lower() in {"nan", "none", "<na>", "n/d"}:
         return []
     quote: list[float] = []
     for pezzo in re.split(r"[|;\s]+", testo):
@@ -4295,7 +4289,7 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
 
     def _quote_da_cella_soglia(valore: object, soglia: float) -> list[float]:
         testo = str(valore or "").strip()
-        if not testo or testo.lower() in {"nan", "none", "<na>"}:
+        if not testo or testo.lower() in {"nan", "none", "<na>", "n/d"}:
             return []
         quote_soglia: list[float] = []
         for pezzo in re.split(r"[|;\s]+", testo):
@@ -5728,6 +5722,11 @@ def _render_inserimento_dati_gara() -> None:
             st.markdown("### Inserimento Dati Gara")
             st.info("💡 Incolla qui il testo puro dei partenti. Nessuna formattazione complessa.")
             testo_incollato = st.text_area("Dati Corse (righe separate)", height=300, placeholder="Esempio:\n1 NOME_CAVALLO 15.00\n2 ALTRO_CAVALLO 3.50")
+            
+            if 'testo_incollato' in locals() and testo_incollato:
+                num_righe = len(testo_incollato.splitlines())
+                if num_righe > 0:
+                    st.info(f"🟢 Testo rilevato nel buffer: {num_righe} righe pronte per l'analisi Sigma.")
             
             invia_btn = st.form_submit_button("Analizza Gara 🚀", use_container_width=True)
         reset = st.button(
