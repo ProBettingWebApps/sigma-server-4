@@ -78,6 +78,11 @@ st.markdown("""
         color: #ffffff !important;
         -webkit-text-fill-color: #ffffff !important;
     }
+    /* Sfondo scuro e testo bianco per la text area - Direttiva 3 */
+    .stTextArea textarea {
+        color: #ffffff !important;
+        background-color: #1a1a1a !important;
+    }
     div[data-baseweb="base-input"] {
         background-color: #2b2b2b !important;
     }
@@ -5719,14 +5724,12 @@ def _render_inserimento_dati_gara() -> None:
             "Parse + calcolo Sigma istantaneo. La corsa viene salvata "
             "automaticamente in memoria e SQLite."
         )
-        with st.form("form_dati_gara", clear_on_submit=True):
-            st.info("👇 📝 INCOLLA QUI SOTTO I DATI GREZZI DELLE CORSE 👇")
-            testo_grezzo = st.text_area("Dati Corse", height=300, placeholder="📝 Incolla qui il testo puro dei partenti...")
-            elabora = st.form_submit_button(
-                "Elabora Dati Gara",
-                type="primary",
-                use_container_width=True,
-            )
+        with st.form("inserimento_partenti_form", clear_on_submit=False):
+            st.markdown("### Inserimento Dati Gara")
+            st.info("💡 Incolla qui il testo puro dei partenti. Nessuna formattazione complessa.")
+            testo_incollato = st.text_area("Dati Corse (righe separate)", height=300, placeholder="Esempio:\n1 NOME_CAVALLO 15.00\n2 ALTRO_CAVALLO 3.50")
+            
+            invia_btn = st.form_submit_button("Analizza Gara 🚀", use_container_width=True)
         reset = st.button(
             "🔄 Reset / Nuova Corsa",
             use_container_width=True,
@@ -5735,11 +5738,12 @@ def _render_inserimento_dati_gara() -> None:
         if reset:
             _reset_dashboard_nuova_corsa()
             st.rerun()
-        if elabora:
-            if not testo_grezzo.strip():
-                st.warning("Assenza di dati - Nessun testo grezzo da elaborare")
+        if invia_btn:
+            if not testo_incollato or testo_incollato.strip() == "":
+                st.error("⚠️ ERRORE: Nessun dato incollato. Inserisci i partenti.")
             else:
-                intestazione, tabella = parse_gara_completa(testo_grezzo)
+                st.success(f"✅ DATI INCOLLATI CORRETTAMENTE ({len(testo_incollato.splitlines())} righe). Elaborazione in corso...")
+                intestazione, tabella = parse_gara_completa(testo_incollato)
                 if tabella.empty:
                     st.warning(
                         "Assenza di dati - Nessun cavallo riconosciuto "
@@ -5748,7 +5752,7 @@ def _render_inserimento_dati_gara() -> None:
                 else:
                     for avviso in _avvisi_dati_statistici_partenti_mancanti(tabella):
                         st.warning(f"Assenza di dati - {avviso}")
-                    mercato = _statistiche_mercato_da_testo(testo_grezzo)
+                    mercato = _statistiche_mercato_da_testo(testo_incollato)
                     classifica = calcola_value_bet(tabella)
                     classifica = _ensure_colonne_distribuzione_sigma(classifica)
                     if (
