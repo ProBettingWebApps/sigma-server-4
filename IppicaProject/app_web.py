@@ -6131,7 +6131,7 @@ def _svuota_archivio_corse() -> None:
         conn.execute("DELETE FROM gare_sigma_archivio")
         conn.commit()
     st.session_state.database_corse = []
-    st.session_state.gara_selezionata_id = None
+    # st.session_state.gara_selezionata_id = None
 
 
 def _reset_archivio_corse_manuale() -> None:
