@@ -318,7 +318,7 @@ def estrai_dati(testo_incollato):
         numero = parti[0]
         # Tenta di prendere la quota alla fine. Se fallisce, significa che non c'è.
         try:
-            quota = float(parti[-1].replace(',', '.'))
+            quota = float(str(parti[-1]).replace(',', '.'))
             nome = " ".join(parti[1:-1])
         except ValueError:
             quota = 0.0
