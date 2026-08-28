@@ -3422,6 +3422,16 @@ def _archivia_gara_in_memoria(
     st.session_state.dati_gara_dataframe = partenti.copy()
     st.session_state.sigma_value_bet = classifica.copy()
     st.session_state.intestazione_gara_corrente = dict(intestazione)
+    try:
+        _accoda_gara_storico_testo(
+            gara_id,
+            intestazione,
+            partenti,
+            classifica,
+            salvato_il,
+        )
+    except OSError as exc:
+        st.warning(f"Salvataggio automatico dello storico non eseguito: {exc}")
     return gara_id
 
 
@@ -5834,10 +5844,6 @@ def _render_inserimento_dati_gara() -> None:
                     _archivia_gara_in_memoria(
                         intestazione, tabella, classifica, mercato=mercato
                     )
-                    try:
-                        _svuota_storico_gare_testo()
-                    except OSError as exc:
-                        st.warning(f"Pulizia storico non eseguita: {exc}")
                     st.session_state.pulisci_input_gara_al_prossimo_render = True
                     st.session_state.dashboard_live_vuota = False
                     st.session_state.messaggio_flash = (
@@ -5848,25 +5854,21 @@ def _render_inserimento_dati_gara() -> None:
 
 
 def _render_storico_gare_testo() -> None:
-    if st.button(
-        "💾 Salva gara",
-        type="primary",
-        use_container_width=True,
-        key="salva_gara_storico_testo",
-    ):
-        try:
-            _salva_gara_corrente_storico_testo()
-            _svuota_storico_gare_testo()
-        except (ValueError, OSError) as exc:
-            st.error(f"Salvataggio non eseguito: {exc}")
-        else:
-            st.session_state.pulisci_input_gara_al_prossimo_render = True
-            st.session_state.messaggio_flash = (
-                "Gara salvata; area di inserimento e storico locale ripuliti."
-            )
-            st.rerun()
-
     with st.expander("📄 Visualizza gare", expanded=True):
+        if st.button(
+            "🗑️ Elimina storico",
+            type="secondary",
+            use_container_width=True,
+            key="elimina_storico_gare_testo",
+        ):
+            try:
+                _svuota_storico_gare_testo()
+            except OSError as exc:
+                st.error(f"Cancellazione non eseguita: {exc}")
+            else:
+                st.success("Storico gare eliminato.")
+                st.rerun()
+
         if not os.path.exists(STORICO_GARE_PATH):
             st.info("Nessuna gara ancora salvata nello storico locale.")
             return
