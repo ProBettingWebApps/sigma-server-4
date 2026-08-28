@@ -3239,6 +3239,12 @@ def _salva_gara_corrente_storico_testo() -> None:
     )
 
 
+def _svuota_storico_gare_testo() -> None:
+    """Azzera lo storico locale senza interferire con la gara elaborata."""
+    with open(STORICO_GARE_PATH, "w", encoding="utf-8"):
+        pass
+
+
 def _deserializza_partenti(payload: str) -> pd.DataFrame:
     if not payload:
         return _dataframe_dati_gara_vuoto()
@@ -5781,6 +5787,9 @@ def _render_inserimento_dati_gara() -> None:
             </style>
         """, unsafe_allow_html=True)
         
+        if st.session_state.get("pulisci_input_gara_al_prossimo_render"):
+            st.session_state.input_testo = ""
+            st.session_state.pulisci_input_gara_al_prossimo_render = False
         testo_incollato = st.text_area("Incolla qui i partenti (anche senza quote):", height=250, key="input_testo")
         
         col_btn1, col_btn2 = st.columns([3, 1])
@@ -5825,6 +5834,11 @@ def _render_inserimento_dati_gara() -> None:
                     _archivia_gara_in_memoria(
                         intestazione, tabella, classifica, mercato=mercato
                     )
+                    try:
+                        _svuota_storico_gare_testo()
+                    except OSError as exc:
+                        st.warning(f"Pulizia storico non eseguita: {exc}")
+                    st.session_state.pulisci_input_gara_al_prossimo_render = True
                     st.session_state.dashboard_live_vuota = False
                     st.session_state.messaggio_flash = (
                         "Gara salvata istantaneamente con Distribuzione Sigma "
@@ -5842,10 +5856,15 @@ def _render_storico_gare_testo() -> None:
     ):
         try:
             _salva_gara_corrente_storico_testo()
+            _svuota_storico_gare_testo()
         except (ValueError, OSError) as exc:
             st.error(f"Salvataggio non eseguito: {exc}")
         else:
-            st.success("Gara accodata correttamente in storico_gare.txt.")
+            st.session_state.pulisci_input_gara_al_prossimo_render = True
+            st.session_state.messaggio_flash = (
+                "Gara salvata; area di inserimento e storico locale ripuliti."
+            )
+            st.rerun()
 
     with st.expander("📄 Visualizza gare", expanded=True):
         if not os.path.exists(STORICO_GARE_PATH):
@@ -6697,6 +6716,8 @@ def _init_session_state() -> None:
         st.session_state.ordine_arrivo = ""
     if "dati_gara_dataframe" not in st.session_state:
         st.session_state.dati_gara_dataframe = _dataframe_dati_gara_vuoto()
+    if "pulisci_input_gara_al_prossimo_render" not in st.session_state:
+        st.session_state.pulisci_input_gara_al_prossimo_render = False
     if "database_corse" not in st.session_state:
         # Caricamento disattivato per modalità usa e getta
         st.session_state.database_corse = []
