@@ -6084,7 +6084,8 @@ def _elimina_gara_da_archivio(gara_id: str) -> None:
         if archivio:
             st.session_state.gara_selezionata_id = str(archivio[-1].get("id"))
         else:
-            st.session_state.gara_selezionata_id = None
+            if 'gara_selezionata_id' in st.session_state:
+                del st.session_state['gara_selezionata_id']
     st.session_state.messaggio_flash = "Corsa eliminata dall'archivio."
 
 
@@ -6119,7 +6120,8 @@ def _svuota_archivio_corse() -> None:
         conn.execute("DELETE FROM gare_sigma_archivio")
         conn.commit()
     st.session_state.database_corse = []
-    st.session_state.gara_selezionata_id = None
+    if 'gara_selezionata_id' in st.session_state:
+        del st.session_state['gara_selezionata_id']
 
 
 def _reset_archivio_corse_manuale() -> None:
@@ -6542,7 +6544,8 @@ def _init_session_state() -> None:
 def _reset_dashboard_nuova_corsa() -> None:
     """Pulisce la dashboard live senza cancellare database_corse / archivio SQLite."""
     st.session_state.dashboard_live_vuota = True
-    st.session_state.gara_selezionata_id = None
+    if 'gara_selezionata_id' in st.session_state:
+        del st.session_state['gara_selezionata_id']
     st.session_state.dati_gara_dataframe = _dataframe_dati_gara_vuoto()
     st.session_state.intestazione_gara_corrente = _intestazione_gara_vuota()
     st.session_state.sigma_value_bet = _dataframe_dati_gara_vuoto()
