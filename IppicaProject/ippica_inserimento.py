@@ -92,9 +92,13 @@ NUMERO_PARTENTE_ISOLATO_RE = re.compile(r"^\s*(?P<numero>\d{1,2})\s*$")
 GABBIA_GALOPPO_RE = re.compile(r"^G\d+$", re.IGNORECASE)
 ETA_YO_PARTENTE_RE = re.compile(r"(?i)\b(?P<eta>\d{1,2}YO)\b")
 RATING_PARTENTE_RE = re.compile(r"(?i)Rating\s*:\s*(?P<rating>\d+(?:[.,]\d+)?)")
-ULTIMI_ARRIVI_PARTENTE_RE = re.compile(
-    r"(?i)Ultimi\s+arrivi\s*:?\s*(?P<ultimi>\d+)"
+ULTIMI_ARRIVI_PARTENTE_RE = re.compile(r"(?i)Ultimi\s+arrivi\s*:?\s*(?P<ultimi>.*)$")
+FORMA_PARTENTE_RE = re.compile(
+    r"(?i)^(?:\d+|[A-Z]{1,6})"
+    r"(?:\s*[-–—]\s*(?:\d{1,2}|[A-Z]{1,6}))*$"
 )
+FORMA_TOKEN_PARTENTE_RE = re.compile(r"(?i)^(?:\d{1,2}|[A-Z]{1,6})$")
+SEPARATORE_FORMA_PARTENTE_RE = re.compile(r"^[-–—]+$")
 DECIMAL_QUOTE_RE = re.compile(r"^\s*(?P<q>\d+[.,]\d{1,2})\s*$")
 RIGA_ORARI_PALINSESTO_RE = re.compile(r"^\s*\d{1,2}\s+\d{1,2}:\d{2}\s*$")
 
@@ -200,10 +204,38 @@ def _estrai_fantino_dopo_eta(linee: list[str], indice_eta: int) -> str | None:
 
 
 def _estrai_ultimi_arrivi_da_blocco(linee: list[str]) -> str:
-    for riga in linee:
+    for indice, riga in enumerate(linee):
         match = ULTIMI_ARRIVI_PARTENTE_RE.search(riga)
-        if match is not None:
-            return str(match.group("ultimi") or "").strip()
+        if match is None:
+            continue
+        inline = str(match.group("ultimi") or "").strip()
+        if inline and FORMA_PARTENTE_RE.fullmatch(inline):
+            return re.sub(r"\s*[-–—]\s*", " - ", inline).upper()
+
+        verticali: list[str] = []
+        for successiva in linee[indice + 1 : indice + 15]:
+            testo = successiva.strip()
+            if not testo:
+                continue
+            if DECIMAL_QUOTE_RE.fullmatch(testo):
+                break
+            if RATING_PARTENTE_RE.search(testo) or re.search(
+                r"(?i)\bmetri\b", testo
+            ):
+                continue
+            if FORMA_PARTENTE_RE.fullmatch(testo) and (
+                "-" in testo or "–" in testo or "—" in testo or len(testo) > 2
+            ):
+                return re.sub(r"\s*[-–—]\s*", " - ", testo).upper()
+            if FORMA_TOKEN_PARTENTE_RE.fullmatch(testo):
+                verticali.append(testo.upper())
+                continue
+            if SEPARATORE_FORMA_PARTENTE_RE.fullmatch(testo):
+                continue
+            break
+        if verticali:
+            return " - ".join(verticali)
+        return ""
     return ""
 
 
@@ -308,6 +340,28 @@ def _parse_singolo_blocco_partente(
 
 def estrai_dati(testo_incollato):
     import pandas as pd
+    partenti = parse_partenti_testo_grezzo(str(testo_incollato or ""))
+    if partenti:
+        dati_strutturati = []
+        for partente in partenti:
+            quote = [partente.quota_vincente]
+            if partente.quota_piazzato is not None:
+                quote.append(partente.quota_piazzato)
+            forma = partente.ultimi_arrivi
+            dati_strutturati.append(
+                {
+                    "Numero": partente.numero,
+                    "Nome": partente.nome,
+                    "Quota": partente.quota_vincente,
+                    "Età": partente.eta,
+                    "Rating": partente.rating,
+                    "Ultimi Arrivi": forma,
+                    "Forma_Storica": forma,
+                    "Quote Valide": " | ".join(f"{q:.2f}" for q in quote),
+                }
+            )
+        return pd.DataFrame(dati_strutturati)
+
     dati = []
     for riga in testo_incollato.splitlines():
         riga = riga.strip()
