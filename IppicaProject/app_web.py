@@ -5860,13 +5860,97 @@ def _render_storico_gare_testo() -> None:
         if not contenuto:
             st.info("Lo storico locale è vuoto.")
             return
-        st.text_area(
-            "Contenuto di storico_gare.txt",
-            value=contenuto,
-            height=320,
-            disabled=True,
-            key="contenuto_storico_gare_testo",
-        )
+
+        gare_salvate: list[dict[str, object]] = []
+        righe_non_valide = 0
+        for riga_json in contenuto.splitlines():
+            if not riga_json.strip():
+                continue
+            try:
+                gara_salvata = json.loads(riga_json)
+            except json.JSONDecodeError:
+                righe_non_valide += 1
+                continue
+            if isinstance(gara_salvata, dict):
+                gare_salvate.append(gara_salvata)
+
+        if not gare_salvate:
+            st.warning("Nessuna gara valida leggibile nello storico locale.")
+            return
+        if righe_non_valide:
+            st.warning(
+                f"{righe_non_valide} righe non valide sono state escluse "
+                "dalla visualizzazione."
+            )
+
+        st.caption(f"{len(gare_salvate)} gare salvate · dalla più recente")
+        for gara_salvata in reversed(gare_salvate):
+            intestazione = gara_salvata.get("intestazione")
+            if not isinstance(intestazione, dict):
+                intestazione = {}
+            titolo = str(intestazione.get("Ippodromo/Corsa") or "Gara salvata")
+            salvato_il = str(gara_salvata.get("salvato_il") or "")
+
+            with st.container(border=True):
+                st.markdown(f"#### 🏇 {titolo}")
+                if salvato_il:
+                    st.caption(f"Salvata il {salvato_il}")
+                col_premio, col_distanza, col_data = st.columns(3)
+                col_premio.markdown(
+                    f"**Premio:** {intestazione.get('Premio') or 'Non disponibile'}"
+                )
+                col_distanza.markdown(
+                    f"**Distanza:** "
+                    f"{intestazione.get('Distanza') or 'Non disponibile'}"
+                )
+                riferimento_data = " · ".join(
+                    valore
+                    for valore in (
+                        str(intestazione.get("Data") or "").strip(),
+                        str(intestazione.get("Orario") or "").strip(),
+                    )
+                    if valore
+                )
+                col_data.markdown(
+                    f"**Data/ora:** {riferimento_data or 'Non disponibile'}"
+                )
+
+                classifica = gara_salvata.get("classifica_sigma")
+                if not isinstance(classifica, list) or not classifica:
+                    classifica = gara_salvata.get("partenti")
+                if not isinstance(classifica, list) or not classifica:
+                    st.info("Nessun cavallo salvato per questa gara.")
+                    continue
+
+                righe_cavalli: list[dict[str, object]] = []
+                for cavallo in classifica:
+                    if not isinstance(cavallo, dict):
+                        continue
+                    righe_cavalli.append(
+                        {
+                            "N°": cavallo.get("N°"),
+                            "Cavallo": cavallo.get("Nome"),
+                            "Quote": cavallo.get("Quote Valide"),
+                            "Rating": cavallo.get("Rating"),
+                            "Regression": cavallo.get("Regression"),
+                            "Quanta": cavallo.get("Quanta"),
+                            "Elastico": cavallo.get("Elastico"),
+                            "Sigma": cavallo.get("Sigma Value Score"),
+                            "Fair Odds": cavallo.get("Fair_Odds"),
+                            "Value Bet": cavallo.get("Value_Bet"),
+                            "Consiglio operativo": cavallo.get(
+                                "Consiglio_Operativo"
+                            ),
+                        }
+                    )
+                if righe_cavalli:
+                    st.dataframe(
+                        pd.DataFrame(righe_cavalli),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+                else:
+                    st.info("Nessun cavallo valido salvato per questa gara.")
 
 
 def _nomi_cavalli_da_dataframe(df: pd.DataFrame) -> list[str]:
