@@ -5703,6 +5703,18 @@ def _render_inserimento_dati_gara() -> None:
         )
         st.markdown("### Inserimento Dati Gara")
         st.info("💡 Incolla qui il testo puro dei partenti. Nessuna formattazione complessa.")
+        
+        st.markdown("""
+            <style>
+            div[data-baseweb="textarea"] textarea, .stTextArea textarea {
+                background-color: #f0f2f6 !important;
+                color: #000000 !important;
+                -webkit-text-fill-color: #000000 !important;
+                font-weight: bold !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
         testo_incollato = st.text_area("Incolla qui i partenti (anche senza quote):", height=250, key="input_testo")
         
         col_btn1, col_btn2 = st.columns([3, 1])
@@ -6886,10 +6898,8 @@ def _render_intestazione_corsa_editor() -> None:
 
 def _render_v1025_header(numero_partenti: int) -> None:
     _ = numero_partenti
-    import pytz
-    from datetime import datetime
-    fuso_italia = pytz.timezone('Europe/Rome')
-    ora_diretta = datetime.now(fuso_italia).strftime("%d/%m/%Y | %H:%M")
+    from datetime import datetime, timedelta
+    ora_diretta = (datetime.utcnow() + timedelta(hours=2)).strftime("%d/%m/%Y | %H:%M")
     orario_attuale = html.escape(ora_diretta)
 
     _st_html(
