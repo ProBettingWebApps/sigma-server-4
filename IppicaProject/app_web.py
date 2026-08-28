@@ -3254,30 +3254,6 @@ def _salva_gara_sqlite(
         conn.commit()
 
 
-def _salva_gara_corrente_database_locale() -> None:
-    """Salva o aggiorna su ippica_dati.db la gara attualmente visualizzata."""
-    gara = _gara_selezionata()
-    if gara is None:
-        raise ValueError("Assenza di dati - Nessuna gara disponibile da salvare.")
-    partenti = gara.get("partenti")
-    if not isinstance(partenti, pd.DataFrame) or partenti.empty:
-        raise ValueError("Assenza di dati - Nessun partente disponibile da salvare.")
-    classifica = gara.get("classifica")
-    if not isinstance(classifica, pd.DataFrame):
-        classifica = None
-    pronostico = gara.get("pronostico_generato")
-    if not isinstance(pronostico, dict):
-        pronostico = None
-    _salva_gara_sqlite(
-        str(gara["id"]),
-        dict(gara.get("intestazione") or {}),
-        partenti,
-        classifica,
-        pronostico,
-        str(gara.get("salvata_il") or ora_italiana().isoformat(timespec="seconds")),
-    )
-
-
 def _carica_archivio_gare_sqlite() -> list[dict]:
     ordini_map = _carica_ordini_arrivo_gare()
     with sqlite3.connect(DB_PATH) as conn:
@@ -5773,7 +5749,7 @@ def _render_inserimento_dati_gara() -> None:
                 use_container_width=True,
                 key="reset_nuova_corsa_dashboard",
             )
-
+        
         if reset:
             _reset_dashboard_nuova_corsa()
             st.rerun()
@@ -6561,8 +6537,6 @@ def _init_session_state() -> None:
     if "database_corse" not in st.session_state:
         # Caricamento disattivato per modalità usa e getta
         st.session_state.database_corse = []
-    if "mostra_gestione_database_sqlite" not in st.session_state:
-        st.session_state.mostra_gestione_database_sqlite = False
     if "intestazione_gara_corrente" not in st.session_state:
         st.session_state.intestazione_gara_corrente = _intestazione_gara_vuota()
     if "gara_selezionata_id" not in st.session_state:
@@ -7099,84 +7073,6 @@ def _render_v1025_header(numero_partenti: int) -> None:
         )
 
 
-def _render_gestione_database_sqlite_alto() -> None:
-    if st.button(
-        "🗄️ Gestione Database SQLite",
-        type="secondary",
-        use_container_width=True,
-        key="apri_gestione_database_sqlite",
-    ):
-        st.session_state.mostra_gestione_database_sqlite = not bool(
-            st.session_state.get("mostra_gestione_database_sqlite")
-        )
-
-    if not st.session_state.get("mostra_gestione_database_sqlite"):
-        return
-
-    with st.expander("🗄️ Database locale ippica_dati.db", expanded=True):
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                conn.execute("SELECT 1").fetchone()
-            archivio = _carica_archivio_gare_sqlite()
-        except sqlite3.Error as exc:
-            st.error(f"Connessione SQLite non disponibile: {exc}")
-            return
-
-        st.success(
-            f"Connessione attiva: {os.path.abspath(DB_PATH)} · "
-            f"{len(archivio)} gare salvate"
-        )
-        if st.button(
-            "💾 Salva gara corrente",
-            type="primary",
-            use_container_width=True,
-            key="salva_gara_database_header",
-        ):
-            try:
-                _salva_gara_corrente_database_locale()
-            except (ValueError, sqlite3.Error) as exc:
-                st.error(f"Salvataggio non eseguito: {exc}")
-            else:
-                st.success("Gara salvata correttamente in ippica_dati.db.")
-
-        if not archivio:
-            st.info("Nessuna gara salvata nel database.")
-            return
-
-        riepilogo = pd.DataFrame(
-            [
-                {
-                    "Data": gara["intestazione"].get("Data", ""),
-                    "Orario": gara["intestazione"].get("Orario", ""),
-                    "Ippodromo/Corsa": gara["intestazione"].get(
-                        "Ippodromo/Corsa", ""
-                    ),
-                    "Partenti": len(gara["partenti"]),
-                    "Salvata il": gara.get("salvata_il", ""),
-                    "Ordine arrivo": gara.get("ordine_arrivo", ""),
-                }
-                for gara in reversed(archivio)
-            ]
-        )
-        st.dataframe(riepilogo, hide_index=True, use_container_width=True)
-
-        gare_per_id = {str(gara["id"]): gara for gara in archivio}
-        gara_id = st.selectbox(
-            "Visualizza dati storici della gara",
-            options=list(gare_per_id),
-            format_func=lambda identificativo: gare_per_id[identificativo][
-                "etichetta"
-            ],
-            key="gara_storica_database_header",
-        )
-        gara_storica = gare_per_id[gara_id]
-        st.dataframe(
-            gara_storica["partenti"],
-            hide_index=True,
-            use_container_width=True,
-        )
-
-
 def _render_archivio_risultati_finali_contenuto() -> None:
     st.caption(
         "Archivio manuale degli esiti reali. Questi dati non modificano "
@@ -7279,7 +7175,6 @@ def main() -> None:
         else len(tabella) if isinstance(tabella, pd.DataFrame) else 0
     )
     _render_v1025_header(partenti_header)
-    _render_gestione_database_sqlite_alto()
 
     if st.session_state.messaggio_flash:
         st.info(st.session_state.messaggio_flash)
