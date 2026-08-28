@@ -6096,7 +6096,7 @@ def _elimina_gara_da_archivio(gara_id: str) -> None:
         if archivio:
             st.session_state.gara_selezionata_id = str(archivio[-1].get("id"))
         else:
-            st.session_state.gara_selezionata_id = None
+            # st.session_state.gara_selezionata_id = None
     st.session_state.messaggio_flash = "Corsa eliminata dall'archivio."
 
 
