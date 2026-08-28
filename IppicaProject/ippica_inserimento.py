@@ -306,6 +306,55 @@ def _parse_singolo_blocco_partente(
         blocco=blocco_testo,
     )
 
+def parse_dati_gara(testo: str) -> pd.DataFrame:
+    """
+    Parser Blindato Universale (Tritatutto).
+    - Divide il testo in righe. Ignora le righe vuote.
+    - Per ogni riga: cerca il primo numero intero all'inizio (Numero cavallo).
+    - Cerca l'ultimo numero (intero o decimale) alla fine della riga. Se esiste, è la Quota. Se NON esiste, Quota = 0.0.
+    - Tutto il testo in mezzo è il Nome del cavallo.
+    - Restituisce SEMPRE un DataFrame Pandas con ['Numero', 'Nome', 'Quota'].
+    - Non scarta MAI una riga se ha almeno un numero e una parola.
+    """
+    import pandas as pd
+    import re
+    righe = [r.strip() for r in testo.splitlines() if r.strip()]
+    dati = []
+    
+    num_iniziale_re = re.compile(r'^(\d+)')
+    num_finale_re = re.compile(r'(\d+(?:[.,]\d+)?)$')
+    parola_re = re.compile(r'[a-zA-Z]+')
+    
+    for riga in righe:
+        match_inizio = num_iniziale_re.search(riga)
+        if not match_inizio:
+            continue
+            
+        numero_str = match_inizio.group(1)
+        riga_resto = riga[len(numero_str):].strip()
+        
+        match_fine = num_finale_re.search(riga_resto)
+        if match_fine:
+            quota_str = match_fine.group(1)
+            quota_val = float(quota_str.replace(',', '.'))
+            nome_cavallo = riga_resto[: -len(quota_str)].strip()
+        else:
+            quota_val = 0.0
+            nome_cavallo = riga_resto.strip()
+            
+        nome_cavallo = re.sub(r'^[\W_]+', '', nome_cavallo)
+        nome_cavallo = re.sub(r'[\W_]+$', '', nome_cavallo)
+        
+        if parola_re.search(nome_cavallo):
+            dati.append({
+                'Numero': int(numero_str),
+                'Nome': nome_cavallo,
+                'Quota': quota_val
+            })
+            
+    return pd.DataFrame(dati, columns=['Numero', 'Nome', 'Quota'])
+
+
 
 def parse_partenti_testo_grezzo(testo: str) -> list[PartenteGaraGrezzo]:
     """
