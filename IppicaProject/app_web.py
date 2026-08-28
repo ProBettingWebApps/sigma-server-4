@@ -41,6 +41,11 @@ from ippica_inserimento import (
     partente_grezzo_a_record_dict,
 )
 
+STORICO_GARE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "storico_gare.txt",
+)
+
 def ora_italiana():
     return datetime.now(pytz.timezone('Europe/Rome'))
 
@@ -3188,6 +3193,33 @@ def _serializza_partenti(partenti: pd.DataFrame) -> str:
     return partenti.to_json(orient="records", force_ascii=False, date_format="iso")
 
 
+def _accoda_gara_storico_testo(
+    gara_id: str,
+    intestazione: dict[str, str],
+    partenti: pd.DataFrame,
+    classifica: pd.DataFrame,
+    salvato_il: str,
+) -> None:
+    """Accoda una gara reale in formato JSON Lines nel file storico locale."""
+    record = {
+        "id": gara_id,
+        "salvato_il": salvato_il,
+        "intestazione": dict(intestazione),
+        "partenti": json.loads(
+            partenti.to_json(orient="records", force_ascii=False, date_format="iso")
+        ),
+        "classifica_sigma": json.loads(
+            classifica.to_json(
+                orient="records",
+                force_ascii=False,
+                date_format="iso",
+            )
+        ),
+    }
+    with open(STORICO_GARE_PATH, "a", encoding="utf-8") as storico:
+        storico.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
 def _deserializza_partenti(payload: str) -> pd.DataFrame:
     if not payload:
         return _dataframe_dati_gara_vuoto()
@@ -3365,10 +3397,16 @@ def _archivia_gara_in_memoria(
     st.session_state.dati_gara_dataframe = partenti.copy()
     st.session_state.sigma_value_bet = classifica.copy()
     st.session_state.intestazione_gara_corrente = dict(intestazione)
-    # _salva_gara_sqlite disattivato per modalità usa e getta
-    # _salva_gara_sqlite(
-    #     gara_id, intestazione, partenti, classifica, pronostico_generato, salvato_il
-    # )
+    try:
+        _accoda_gara_storico_testo(
+            gara_id,
+            intestazione,
+            partenti,
+            classifica,
+            salvato_il,
+        )
+    except OSError as exc:
+        st.warning(f"Storico testuale non salvato: {exc}")
     return gara_id
 
 
@@ -5786,6 +5824,23 @@ def _render_inserimento_dati_gara() -> None:
                     st.rerun()
 
 
+def _render_storico_gare_testo() -> None:
+    with st.expander("📄 Visualizza storico gare", expanded=False):
+        if not os.path.exists(STORICO_GARE_PATH):
+            st.info("Nessuna gara ancora salvata nello storico locale.")
+            return
+        try:
+            with open(STORICO_GARE_PATH, "r", encoding="utf-8") as storico:
+                contenuto = storico.read().strip()
+        except OSError as exc:
+            st.error(f"Impossibile leggere lo storico locale: {exc}")
+            return
+        if not contenuto:
+            st.info("Lo storico locale è vuoto.")
+            return
+        st.code(contenuto, language="json")
+
+
 def _nomi_cavalli_da_dataframe(df: pd.DataFrame) -> list[str]:
     if not isinstance(df, pd.DataFrame) or df.empty or "Nome" not in df.columns:
         return []
@@ -7178,6 +7233,7 @@ def main() -> None:
 
     st.divider()
     _render_inserimento_dati_gara()
+    _render_storico_gare_testo()
     # _render_database_archivio_corse disattivato per modalità usa e getta
     st.divider()
 
