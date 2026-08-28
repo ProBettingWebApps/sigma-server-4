@@ -35,7 +35,7 @@ from ippica_inserimento import (
     carica_cavalli_sessione_da_db,
     etichetta_cavallo,
     init_database,
-    parse_dati_gara,
+    estrai_dati,
 )
 
 def ora_italiana():
@@ -73,22 +73,12 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    div[data-baseweb="textarea"] {
-        background-color: #1a1a1a !important;
-        border: 2px solid #4CAF50 !important;
-        border-radius: 8px !important;
-    }
-    textarea, .stTextArea textarea {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        background-color: #1a1a1a !important;
-        font-family: monospace !important;
-        font-size: 14px !important;
-    }
-    textarea::placeholder {
-        color: #888888 !important;
-        -webkit-text-fill-color: #888888 !important;
-        opacity: 1 !important;
+    /* Forza il testo nero e lo sfondo bianco per la text area per contrasto assoluto */
+    textarea[data-baseweb="textarea"], div[data-baseweb="base-input"] > textarea, .stTextArea textarea {
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        background-color: #ffffff !important;
+        font-weight: bold !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -3026,7 +3016,7 @@ def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
     if not testo_originale:
         return _dataframe_dati_gara_vuoto()
 
-    df_blindato = parse_dati_gara(testo_originale)
+    df_blindato = estrai_dati(testo_originale)
     if df_blindato.empty:
         return _dataframe_dati_gara_vuoto()
         
@@ -6896,7 +6886,11 @@ def _render_intestazione_corsa_editor() -> None:
 
 def _render_v1025_header(numero_partenti: int) -> None:
     _ = numero_partenti
-    orario_attuale = html.escape(ora_italiana().strftime("%d/%m/%Y | %H:%M"))
+    import pytz
+    from datetime import datetime
+    fuso_italia = pytz.timezone('Europe/Rome')
+    ora_diretta = datetime.now(fuso_italia).strftime("%d/%m/%Y | %H:%M")
+    orario_attuale = html.escape(ora_diretta)
 
     _st_html(
         """
