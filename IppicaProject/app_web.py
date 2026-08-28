@@ -22,6 +22,7 @@ import uuid
 import pytz
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
+from pathlib import Path
 import pandas as pd
 import io
 import plotly.express as px
@@ -40,6 +41,8 @@ from ippica_inserimento import (
     parse_partenti_testo_grezzo,
     partente_grezzo_a_record_dict,
 )
+
+DB_PATH = str(Path(__file__).resolve().with_name("ippica_dati.db"))
 
 def ora_italiana():
     return datetime.now(pytz.timezone('Europe/Rome'))
@@ -3254,6 +3257,30 @@ def _salva_gara_sqlite(
         conn.commit()
 
 
+def _salva_gara_corrente_database_locale() -> None:
+    """Salva o aggiorna su ippica_dati.db la gara attualmente visualizzata."""
+    gara = _gara_selezionata()
+    if gara is None:
+        raise ValueError("Assenza di dati - Nessuna gara disponibile da salvare.")
+    partenti = gara.get("partenti")
+    if not isinstance(partenti, pd.DataFrame) or partenti.empty:
+        raise ValueError("Assenza di dati - Nessun partente disponibile da salvare.")
+    classifica = gara.get("classifica")
+    if not isinstance(classifica, pd.DataFrame):
+        classifica = None
+    pronostico = gara.get("pronostico_generato")
+    if not isinstance(pronostico, dict):
+        pronostico = None
+    _salva_gara_sqlite(
+        str(gara["id"]),
+        dict(gara.get("intestazione") or {}),
+        partenti,
+        classifica,
+        pronostico,
+        str(gara.get("salvata_il") or ora_italiana().isoformat(timespec="seconds")),
+    )
+
+
 def _carica_archivio_gare_sqlite() -> list[dict]:
     ordini_map = _carica_ordini_arrivo_gare()
     with sqlite3.connect(DB_PATH) as conn:
@@ -5749,6 +5776,21 @@ def _render_inserimento_dati_gara() -> None:
                 use_container_width=True,
                 key="reset_nuova_corsa_dashboard",
             )
+
+        salva_database = st.button(
+            "💾 Salva / aggiorna gara nel database locale",
+            type="secondary",
+            use_container_width=True,
+            key="salva_gara_database_locale",
+        )
+
+        if salva_database:
+            try:
+                _salva_gara_corrente_database_locale()
+            except (ValueError, sqlite3.Error) as exc:
+                st.error(f"Salvataggio database non eseguito: {exc}")
+            else:
+                st.success("Gara salvata correttamente in ippica_dati.db.")
         
         if reset:
             _reset_dashboard_nuova_corsa()
@@ -6535,8 +6577,7 @@ def _init_session_state() -> None:
     if "dati_gara_dataframe" not in st.session_state:
         st.session_state.dati_gara_dataframe = _dataframe_dati_gara_vuoto()
     if "database_corse" not in st.session_state:
-        # Caricamento disattivato per modalità usa e getta
-        st.session_state.database_corse = []
+        st.session_state.database_corse = _carica_archivio_gare_sqlite()
     if "intestazione_gara_corrente" not in st.session_state:
         st.session_state.intestazione_gara_corrente = _intestazione_gara_vuota()
     if "gara_selezionata_id" not in st.session_state:
@@ -7153,7 +7194,7 @@ def _controlla_scadenza_palinsesto() -> None:
 
 
 def main() -> None:
-    init_database()
+    init_database(DB_PATH)
     _init_risultati_storici()
     _init_archivio_gare_sigma()
     _init_palinsesto_database()
