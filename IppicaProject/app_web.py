@@ -30,12 +30,15 @@ import streamlit as st
 
 from ippica_inserimento import (
     DB_PATH,
+    SOGLIA_QUOTA_VINCENTE_SIGMA,
     Corsa,
     SchedaCavallo,
     carica_cavalli_sessione_da_db,
     etichetta_cavallo,
     init_database,
     estrai_dati,
+    parse_partenti_testo_grezzo,
+    partente_grezzo_a_record_dict,
 )
 
 def ora_italiana():
@@ -1098,6 +1101,8 @@ COLONNE_MODULI_DISTRIBUZIONE_SIGMA = [
     "Alert_Anomalia",
     "Global_Star_Rating",
     "Fair_Odds",
+    "Value_Bet",
+    "Value_Edge",
     "Consiglio_Operativo",
 ]
 
@@ -2999,19 +3004,47 @@ def _inietta_moduli_da_forma_storica(df: pd.DataFrame) -> pd.DataFrame:
 
 def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
     """
-    Parser Blindato Universale: estrae sempre un DataFrame con i partenti
-    senza mai scartare righe valide.
+    Parser Blindato Universale: usa prima il parser condiviso di
+    ippica_inserimento, preservando Rating, forma e quote per ogni partente.
+    Le quote sotto la soglia Sigma vengono escluse prima di ogni calcolo.
     """
     testo_originale = testo.strip()
     if not testo_originale:
         return _dataframe_dati_gara_vuoto()
 
-    df_blindato = estrai_dati(testo_originale)
+    righe_condivise: list[dict[str, object]] = []
+    for partente in parse_partenti_testo_grezzo(testo_originale):
+        record = partente_grezzo_a_record_dict(partente)
+        righe_condivise.append(_record_da_macchina_stati(record))
+
+    if righe_condivise:
+        df_blindato = pd.DataFrame(righe_condivise)
+    else:
+        # I parser locali coprono impaginazioni bookmaker alternative, ma
+        # producono lo stesso schema completo del parser condiviso.
+        df_blindato = _dataframe_partenti_orizzontale(testo_originale)
+        if df_blindato.empty:
+            df_blindato = _dataframe_partenti_verticali_standard(testo_originale)
+        if df_blindato.empty:
+            df_blindato = estrai_dati(testo_originale)
+
     if df_blindato.empty:
         return _dataframe_dati_gara_vuoto()
-        
+
     df_normalizzato = _normalizza_dataframe_partenti(df_blindato)
-    return _inietta_moduli_da_forma_storica(df_normalizzato)
+    righe_valide: list[pd.Series] = []
+    for _indice, riga in df_normalizzato.iterrows():
+        quote = _parse_quote_valide_cella(riga.get("Quote Valide"))
+        if not quote:
+            continue
+        riga_filtrata = riga.copy()
+        riga_filtrata["Quote Valide"] = " | ".join(f"{q:.2f}" for q in quote)
+        righe_valide.append(riga_filtrata)
+
+    if not righe_valide:
+        return _dataframe_dati_gara_vuoto()
+    filtrato = pd.DataFrame(righe_valide).reset_index(drop=True)
+    return _inietta_moduli_da_forma_storica(filtrato)
 
 
 def parse_gara_completa(
@@ -4178,7 +4211,7 @@ def _parse_quote_valide_cella(valore: object) -> list[float]:
             quota = float(pezzo.replace(",", "."))
         except ValueError:
             continue
-        if quota >= 1.60:
+        if quota >= SOGLIA_QUOTA_VINCENTE_SIGMA:
             quote.append(quota)
     return quote[:MAX_QUOTE_MERCATO_UTILI]
 
@@ -4223,14 +4256,12 @@ def _overround_lavagna_corsa(df: pd.DataFrame) -> float | None:
     return overround
 
 
-def _fair_odds_da_quota_max(quota_max: float | None, overround: float | None) -> float | None:
-    if quota_max is None or overround is None or quota_max <= 0 or overround <= 0:
+def _fair_odds_da_sigma(sigma_score: float | None) -> float | None:
+    """Quota equa derivata dalla probabilità Sigma, non dalla quota bookmaker."""
+    if sigma_score is None or sigma_score <= 0:
         return None
-    prob_impl = 1.0 / quota_max
-    prob_reale = prob_impl / overround
-    if prob_reale <= 0:
-        return None
-    return 1.0 / prob_reale
+    probabilita_sigma = max(0.01, min(1.0, sigma_score / 100.0))
+    return 1.0 / probabilita_sigma
 
 
 def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
@@ -4257,6 +4288,8 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
     alert_anomalia: list[bool] = []
     global_star_rating: list[float | None] = []
     fair_odds_scores: list[float | None] = []
+    value_bet_scores: list[bool] = []
+    value_edge_scores: list[float | None] = []
 
     overround_lavagna = _overround_lavagna_corsa(lavoro)
 
@@ -4284,33 +4317,21 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
         return float(max(quote_soglia))
 
     per_indice_quota_std: dict[object, float | None] = {}
-    per_indice_quota_tol: dict[object, float | None] = {}
     quote_massime_valide: list[float] = []
     for indice_pre, riga_pre in lavoro.iterrows():
         quota_std = _quota_massima_valida_riga(riga_pre)
-        quota_tol = _quota_massima_soglia_riga(riga_pre, 1.50)
         per_indice_quota_std[indice_pre] = quota_std
-        per_indice_quota_tol[indice_pre] = quota_tol
         if quota_std is not None:
             quote_massime_valide.append(quota_std)
 
     quota_favorito_assoluto: float | None = (
         min(quote_massime_valide) if quote_massime_valide else None
     )
-    quote_tol_corsa = [q for q in per_indice_quota_tol.values() if q is not None]
-    if quote_tol_corsa:
-        min_quota_tol = min(quote_tol_corsa)
-        if quota_favorito_assoluto is None or min_quota_tol < quota_favorito_assoluto:
-            quota_favorito_assoluto = min_quota_tol
-
     for indice, riga in lavoro.iterrows():
         quota_std_riga = per_indice_quota_std.get(indice)
-        quota_tol_riga = per_indice_quota_tol.get(indice)
         is_favorito_assoluto = False
         if quota_favorito_assoluto is not None:
-            quota_confronto = (
-                quota_std_riga if quota_std_riga is not None else quota_tol_riga
-            )
+            quota_confronto = quota_std_riga
             if (
                 quota_confronto is not None
                 and abs(quota_confronto - quota_favorito_assoluto) < 1e-6
@@ -4320,19 +4341,7 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
         rating = rating_numerici.loc[indice]
         eta = _eta_anni(riga.get("Età"))
         quote = _parse_quote_valide_cella(riga.get("Quote Valide"))
-        if (
-            is_favorito_assoluto
-            and not quote
-            and quota_tol_riga is not None
-            and quota_tol_riga >= 1.50
-        ):
-            quote = _quote_da_cella_soglia(riga.get("Quote Valide"), 1.50)
         quota_max = _quota_massima_valida_riga(riga)
-        if is_favorito_assoluto and quota_max is None and quote:
-            quota_max = float(max(quote))
-        fair_odds_scores.append(
-            _fair_odds_da_quota_max(quota_max, overround_lavagna)
-        )
 
         forma_txt = ""
         for chiave_forma in ("Forma_Storica", "Ultimi Arrivi"):
@@ -4469,6 +4478,14 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
             )
             tilt = max(0.0, min(1.0, tilt))
 
+        fair_odds = _fair_odds_da_sigma(sigma)
+        if quota_max is not None and fair_odds is not None:
+            value_edge = (quota_max / fair_odds) - 1.0
+            is_value_bet = value_edge > 0.0
+        else:
+            value_edge = None
+            is_value_bet = False
+
         regression_scores.append(regression)
         quanta_scores.append(quanta)
         elastico_scores.append(elastico)
@@ -4479,6 +4496,9 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
         indice_confidenza.append(confidenza)
         spread_elastico.append(spread_reg_quanta)
         alert_anomalia.append(alert_elastico)
+        fair_odds_scores.append(fair_odds)
+        value_bet_scores.append(is_value_bet)
+        value_edge_scores.append(value_edge)
         global_star_rating.append(
             _calcola_global_star_rating(
                 spread_reg_quanta,
@@ -4500,6 +4520,8 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
     lavoro["Alert_Anomalia"] = alert_anomalia
     lavoro["Global_Star_Rating"] = global_star_rating
     lavoro["Fair_Odds"] = fair_odds_scores
+    lavoro["Value_Bet"] = value_bet_scores
+    lavoro["Value_Edge"] = value_edge_scores
     if overround_lavagna is not None:
         lavoro.attrs["overround_lavagna"] = overround_lavagna
 
@@ -4770,6 +4792,16 @@ def _card_cavallo_html(
     elastico = html.escape(_fmt_nd(riga.get("Elastico")))
     sigma = html.escape(_fmt_nd(riga.get("Sigma Value Score")))
     anomalia = html.escape(_testo_cella_riga_nd(riga, "Anomalia"))
+    value_bet = _bool_cella_riga(riga, "Value_Bet")
+    edge_raw = riga.get("Value_Edge")
+    edge_txt = "N/D"
+    if _valore_cella_presente(edge_raw):
+        try:
+            if not pd.isna(edge_raw):
+                edge_txt = f"{float(edge_raw) * 100:+.1f}%"
+        except (TypeError, ValueError):
+            edge_txt = "N/D"
+    value_bet_txt = "SÌ" if value_bet else "NO"
 
     conf_raw = riga.get("Indice_Confidenza_Sigma")
     conf_pct: float | None
@@ -4967,7 +4999,8 @@ def _card_cavallo_html(
                     <div>Rating: <span style="color:#0FC;">{rating}</span></div>
                     <div>Ultimi Arrivi: <span style="color:#0FC;">{ultimi}</span></div>
                     <div style="word-break:break-word;">Quote Valide: {quote_cella}</div>
-                    <div style="margin-top:0.25rem; color:#FFD700; font-weight:700;">Fair Odds (No-Aggio): {fair_odds_txt}</div>
+                    <div style="margin-top:0.25rem; color:#FFD700; font-weight:700;">Fair Odds Sigma: {fair_odds_txt}</div>
+                    <div>Value Bet: <strong style="color:{'#00FF66' if value_bet else '#FF7777'};">{value_bet_txt}</strong> · Edge {edge_txt}</div>
                     <div style="margin-top:0.25rem;">Regression {regression}</div>
                     <div>Quanta {quanta} · Elastico {elastico}</div>
                 </div>
