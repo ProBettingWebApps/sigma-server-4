@@ -2356,10 +2356,6 @@ def _avvisi_dati_statistici_partenti_mancanti(df: pd.DataFrame) -> list[str]:
         return []
     avvisi: list[str] = []
     rating = pd.to_numeric(df.get("Rating"), errors="coerce")
-    if rating.isna().all():
-        avvisi.append(
-            "Rating assente nel testo incollato: il modulo Regression non è calcolabile."
-        )
     col_ultimi = df.get("Ultimi Arrivi")
     col_forma = df.get("Forma_Storica")
     ultimi_assenti = True
@@ -2369,6 +2365,11 @@ def _avvisi_dati_statistici_partenti_mancanti(df: pd.DataFrame) -> list[str]:
     if ultimi_assenti and col_forma is not None:
         forma_vuoti = col_forma.astype(str).str.strip().eq("") | col_forma.isna()
         ultimi_assenti = bool(forma_vuoti.all())
+    if rating.isna().all() and ultimi_assenti:
+        avvisi.append(
+            "Rating e storico assenti nel testo incollato: "
+            "il modulo Regression non è calcolabile."
+        )
     if ultimi_assenti:
         avvisi.append(
             "Ultimi Arrivi / Forma_Storica assenti nel testo incollato: "
@@ -5611,11 +5612,6 @@ def _render_area_partenti_premium(classifica: pd.DataFrame) -> None:
         drop=True
     )
     if valutabili.empty:
-        st.warning(
-            "Assenza di dati statistici completi nel testo incollato — "
-            "visualizzazione partenti con quote reali "
-            "(Distribuzione Sigma non calcolabile sui moduli assenti)."
-        )
         blocchi_quote: list[str] = []
         for posizione, (_idx, riga) in enumerate(classifica.iterrows(), start=1):
             blocchi_quote.append(
