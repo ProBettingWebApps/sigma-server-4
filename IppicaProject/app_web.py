@@ -35,6 +35,7 @@ from ippica_inserimento import (
     carica_cavalli_sessione_da_db,
     etichetta_cavallo,
     init_database,
+    parse_dati_gara,
 )
 
 def ora_italiana():
@@ -3018,27 +3019,19 @@ def _inietta_moduli_da_forma_storica(df: pd.DataFrame) -> pd.DataFrame:
 
 def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
     """
-    Best Fit Parser: esegue sempre orizzontale e verticale, sceglie
-    il DataFrame con più partenti reali (nessun dato simulato).
+    Parser Blindato Universale: estrae sempre un DataFrame con i partenti
+    senza mai scartare righe valide.
     """
     testo_originale = testo.strip()
     if not testo_originale:
         return _dataframe_dati_gara_vuoto()
 
-    df_orizzontale = _dataframe_partenti_orizzontale(testo_originale)
-    df_verticale = _dataframe_partenti_verticali_standard(testo_originale)
-    if df_verticale.empty:
-        testo_pulito = _testo_gara_preparato(testo_originale)
-        if testo_pulito and testo_pulito != testo_originale:
-            df_verticale = _dataframe_partenti_verticali_standard(testo_pulito)
-
-    n_orizzontale = len(df_orizzontale)
-    n_verticale = len(df_verticale)
-    if n_verticale > n_orizzontale:
-        scelto = df_verticale
-    else:
-        scelto = df_orizzontale
-    return _inietta_moduli_da_forma_storica(scelto)
+    df_blindato = parse_dati_gara(testo_originale)
+    if df_blindato.empty:
+        return _dataframe_dati_gara_vuoto()
+        
+    df_normalizzato = _normalizza_dataframe_partenti(df_blindato)
+    return _inietta_moduli_da_forma_storica(df_normalizzato)
 
 
 def parse_gara_completa(
@@ -5718,30 +5711,29 @@ def _render_inserimento_dati_gara() -> None:
             "Parse + calcolo Sigma istantaneo. La corsa viene salvata "
             "automaticamente in memoria e SQLite."
         )
-        with st.form("inserimento_partenti_form", clear_on_submit=False):
-            st.markdown("### Inserimento Dati Gara")
-            st.info("💡 Incolla qui il testo puro dei partenti. Nessuna formattazione complessa.")
-            testo_incollato = st.text_area("Dati Corse (righe separate)", height=300, placeholder="Esempio:\n1 NOME_CAVALLO 15.00\n2 ALTRO_CAVALLO 3.50")
-            
-            if 'testo_incollato' in locals() and testo_incollato:
-                num_righe = len(testo_incollato.splitlines())
-                if num_righe > 0:
-                    st.info(f"🟢 Testo rilevato nel buffer: {num_righe} righe pronte per l'analisi Sigma.")
-            
-            invia_btn = st.form_submit_button("Analizza Gara 🚀", use_container_width=True)
-        reset = st.button(
-            "🔄 Reset / Nuova Corsa",
-            use_container_width=True,
-            key="reset_nuova_corsa_dashboard",
-        )
+        st.markdown("### Inserimento Dati Gara")
+        st.info("💡 Incolla qui il testo puro dei partenti. Nessuna formattazione complessa.")
+        testo_incollato = st.text_area("Incolla qui i partenti (anche senza quote):", height=250, key="input_testo")
+        
+        col_btn1, col_btn2 = st.columns([3, 1])
+        with col_btn1:
+            invia_btn = st.button("Elabora Dati Gara 🚀", type="primary", use_container_width=True)
+        with col_btn2:
+            reset = st.button(
+                "🔄 Reset",
+                use_container_width=True,
+                key="reset_nuova_corsa_dashboard",
+            )
+        
         if reset:
             _reset_dashboard_nuova_corsa()
             st.rerun()
+            
         if invia_btn:
-            if not testo_incollato or testo_incollato.strip() == "":
-                st.error("⚠️ ERRORE: Nessun dato incollato. Inserisci i partenti.")
+            if not testo_incollato.strip():
+                st.error("⚠️ Nessun testo rilevato. Incolla i dati.")
             else:
-                st.success(f"✅ DATI INCOLLATI CORRETTAMENTE ({len(testo_incollato.splitlines())} righe). Elaborazione in corso...")
+                st.info(f"✅ Letto un blocco di {len(testo_incollato.splitlines())} righe. Inizio analisi...")
                 intestazione, tabella = parse_gara_completa(testo_incollato)
                 if tabella.empty:
                     st.warning(
