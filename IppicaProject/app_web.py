@@ -22,7 +22,6 @@ import uuid
 import pytz
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
-from pathlib import Path
 import pandas as pd
 import io
 import plotly.express as px
@@ -41,8 +40,6 @@ from ippica_inserimento import (
     parse_partenti_testo_grezzo,
     partente_grezzo_a_record_dict,
 )
-
-DB_PATH = str(Path(__file__).resolve().with_name("ippica_dati.db"))
 
 def ora_italiana():
     return datetime.now(pytz.timezone('Europe/Rome'))
@@ -5777,21 +5774,6 @@ def _render_inserimento_dati_gara() -> None:
                 key="reset_nuova_corsa_dashboard",
             )
 
-        salva_database = st.button(
-            "💾 Salva / aggiorna gara nel database locale",
-            type="secondary",
-            use_container_width=True,
-            key="salva_gara_database_locale",
-        )
-
-        if salva_database:
-            try:
-                _salva_gara_corrente_database_locale()
-            except (ValueError, sqlite3.Error) as exc:
-                st.error(f"Salvataggio database non eseguito: {exc}")
-            else:
-                st.success("Gara salvata correttamente in ippica_dati.db.")
-        
         if reset:
             _reset_dashboard_nuova_corsa()
             st.rerun()
@@ -6577,7 +6559,8 @@ def _init_session_state() -> None:
     if "dati_gara_dataframe" not in st.session_state:
         st.session_state.dati_gara_dataframe = _dataframe_dati_gara_vuoto()
     if "database_corse" not in st.session_state:
-        st.session_state.database_corse = _carica_archivio_gare_sqlite()
+        # Caricamento disattivato per modalità usa e getta
+        st.session_state.database_corse = []
     if "mostra_gestione_database_sqlite" not in st.session_state:
         st.session_state.mostra_gestione_database_sqlite = False
     if "intestazione_gara_corrente" not in st.session_state:
@@ -7140,33 +7123,21 @@ def _render_gestione_database_sqlite_alto() -> None:
             return
 
         st.success(
-            f"Connessione attiva: {DB_PATH} · {len(archivio)} gare salvate"
+            f"Connessione attiva: {os.path.abspath(DB_PATH)} · "
+            f"{len(archivio)} gare salvate"
         )
-        col_salva, col_ricarica = st.columns(2)
-        with col_salva:
-            if st.button(
-                "💾 Salva gara corrente",
-                type="primary",
-                use_container_width=True,
-                key="salva_gara_database_header",
-            ):
-                try:
-                    _salva_gara_corrente_database_locale()
-                except (ValueError, sqlite3.Error) as exc:
-                    st.error(f"Salvataggio non eseguito: {exc}")
-                else:
-                    st.success("Gara salvata correttamente in ippica_dati.db.")
-        with col_ricarica:
-            if st.button(
-                "↻ Ricarica dati storici",
-                use_container_width=True,
-                key="ricarica_database_header",
-            ):
-                st.session_state.database_corse = _carica_archivio_gare_sqlite()
-                archivio = list(st.session_state.database_corse)
-                if archivio:
-                    st.session_state.gara_selezionata_id = archivio[-1]["id"]
-                st.rerun()
+        if st.button(
+            "💾 Salva gara corrente",
+            type="primary",
+            use_container_width=True,
+            key="salva_gara_database_header",
+        ):
+            try:
+                _salva_gara_corrente_database_locale()
+            except (ValueError, sqlite3.Error) as exc:
+                st.error(f"Salvataggio non eseguito: {exc}")
+            else:
+                st.success("Gara salvata correttamente in ippica_dati.db.")
 
         if not archivio:
             st.info("Nessuna gara salvata nel database.")
@@ -7286,7 +7257,7 @@ def _controlla_scadenza_palinsesto() -> None:
 
 
 def main() -> None:
-    init_database(DB_PATH)
+    init_database()
     _init_risultati_storici()
     _init_archivio_gare_sigma()
     _init_palinsesto_database()
