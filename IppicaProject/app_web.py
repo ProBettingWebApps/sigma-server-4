@@ -3220,6 +3220,25 @@ def _accoda_gara_storico_testo(
         storico.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def _salva_gara_corrente_storico_testo() -> None:
+    gara = _gara_selezionata()
+    if gara is None:
+        raise ValueError("Nessuna gara disponibile da salvare.")
+    partenti = gara.get("partenti")
+    classifica = gara.get("classifica")
+    if not isinstance(partenti, pd.DataFrame) or partenti.empty:
+        raise ValueError("La gara corrente non contiene partenti.")
+    if not isinstance(classifica, pd.DataFrame) or classifica.empty:
+        raise ValueError("La gara corrente non contiene la classifica Sigma.")
+    _accoda_gara_storico_testo(
+        str(gara["id"]),
+        dict(gara.get("intestazione") or {}),
+        partenti,
+        classifica,
+        str(gara.get("salvata_il") or ora_italiana().isoformat(timespec="seconds")),
+    )
+
+
 def _deserializza_partenti(payload: str) -> pd.DataFrame:
     if not payload:
         return _dataframe_dati_gara_vuoto()
@@ -3397,16 +3416,6 @@ def _archivia_gara_in_memoria(
     st.session_state.dati_gara_dataframe = partenti.copy()
     st.session_state.sigma_value_bet = classifica.copy()
     st.session_state.intestazione_gara_corrente = dict(intestazione)
-    try:
-        _accoda_gara_storico_testo(
-            gara_id,
-            intestazione,
-            partenti,
-            classifica,
-            salvato_il,
-        )
-    except OSError as exc:
-        st.warning(f"Storico testuale non salvato: {exc}")
     return gara_id
 
 
@@ -5825,7 +5834,20 @@ def _render_inserimento_dati_gara() -> None:
 
 
 def _render_storico_gare_testo() -> None:
-    with st.expander("📄 Visualizza storico gare", expanded=False):
+    if st.button(
+        "💾 Salva gara",
+        type="primary",
+        use_container_width=True,
+        key="salva_gara_storico_testo",
+    ):
+        try:
+            _salva_gara_corrente_storico_testo()
+        except (ValueError, OSError) as exc:
+            st.error(f"Salvataggio non eseguito: {exc}")
+        else:
+            st.success("Gara accodata correttamente in storico_gare.txt.")
+
+    with st.expander("📄 Visualizza gare", expanded=True):
         if not os.path.exists(STORICO_GARE_PATH):
             st.info("Nessuna gara ancora salvata nello storico locale.")
             return
@@ -5838,7 +5860,13 @@ def _render_storico_gare_testo() -> None:
         if not contenuto:
             st.info("Lo storico locale è vuoto.")
             return
-        st.code(contenuto, language="json")
+        st.text_area(
+            "Contenuto di storico_gare.txt",
+            value=contenuto,
+            height=320,
+            disabled=True,
+            key="contenuto_storico_gare_testo",
+        )
 
 
 def _nomi_cavalli_da_dataframe(df: pd.DataFrame) -> list[str]:
