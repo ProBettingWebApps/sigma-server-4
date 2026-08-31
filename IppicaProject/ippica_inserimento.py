@@ -91,13 +91,19 @@ SOGLIA_QUOTA_VINCENTE_SIGMA = 1.60
 NUMERO_PARTENTE_ISOLATO_RE = re.compile(r"^\s*(?P<numero>\d{1,2})\s*$")
 GABBIA_GALOPPO_RE = re.compile(r"^G\d+$", re.IGNORECASE)
 ETA_YO_PARTENTE_RE = re.compile(r"(?i)\b(?P<eta>\d{1,2}YO)\b")
-RATING_PARTENTE_RE = re.compile(r"(?i)Rating\s*:\s*(?P<rating>\d+(?:[.,]\d+)?)")
-ULTIMI_ARRIVI_PARTENTE_RE = re.compile(r"(?i)Ultimi\s+arrivi\s*:?\s*(?P<ultimi>.*)$")
-FORMA_PARTENTE_RE = re.compile(
-    r"(?i)^(?:\d+|[A-Z]{1,6})"
-    r"(?:\s*[-–—]\s*(?:\d{1,2}|[A-Z]{1,6}))*$"
+RATING_PARTENTE_RE = re.compile(
+    r"(?i)\b(?:rating|rtg|ratting)\b[ \t]*:?[ \t]*(?P<rating>\d{1,3}(?:[.,]\d+)?)"
 )
-FORMA_TOKEN_PARTENTE_RE = re.compile(r"(?i)^(?:\d{1,2}|[A-Z]{1,6})$")
+ULTIMI_ARRIVI_PARTENTE_RE = re.compile(
+    r"(?i)(?:ultimi\s+arrivi|ultime\s+uscite|forma(?:\s+storica)?)\s*:?\s*(?P<ultimi>.*)$"
+)
+_FORMA_TOKEN_PART = r"(?:\d{1,2}[pP]?|[A-Z]{1,6})"
+FORMA_PARTENTE_RE = re.compile(
+    rf"(?i)^(?:{_FORMA_TOKEN_PART})"
+    rf"(?:\s*[-–—/]\s*{_FORMA_TOKEN_PART}|\s+{_FORMA_TOKEN_PART})*$"
+)
+FORMA_TOKEN_PARTENTE_RE = re.compile(r"(?i)^(?:\d{1,2}[pP]?|[A-Z]{1,6})$")
+FORMA_COMPATTA_PARTENTE_RE = re.compile(r"^\d{3,6}$")
 SEPARATORE_FORMA_PARTENTE_RE = re.compile(r"^[-–—]+$")
 DECIMAL_QUOTE_RE = re.compile(r"^\s*(?P<q>\d+[.,]\d{1,2})\s*$")
 RIGA_ORARI_PALINSESTO_RE = re.compile(r"^\s*\d{1,2}\s+\d{1,2}:\d{2}\s*$")
@@ -203,14 +209,47 @@ def _estrai_fantino_dopo_eta(linee: list[str], indice_eta: int) -> str | None:
     return None
 
 
+def _normalizza_forma_partente(testo: str) -> str:
+    grezzo = " ".join(str(testo or "").split())
+    if not grezzo:
+        return ""
+    grezzo = grezzo.replace("–", "-").replace("—", "-").replace("/", "-")
+    if FORMA_COMPATTA_PARTENTE_RE.fullmatch(grezzo):
+        return grezzo
+    if FORMA_PARTENTE_RE.fullmatch(grezzo):
+        pezzi = re.split(r"\s*[-–—]\s*|\s+", grezzo)
+        pezzi_n = []
+        for p in pezzi:
+            p = p.strip()
+            if not p:
+                continue
+            if re.fullmatch(r"\d{1,2}[pP]", p):
+                p = p[:-1]
+            pezzi_n.append(p.upper() if not p.isdigit() else p)
+        if len(pezzi_n) >= 2 or (len(pezzi_n) == 1 and pezzi_n[0].isdigit() and len(pezzi_n[0]) >= 3):
+            return " - ".join(pezzi_n)
+    match = re.search(
+        rf"(?i)({_FORMA_TOKEN_PART}(?:\s*[-–—/]\s*{_FORMA_TOKEN_PART}){{1,12}})",
+        grezzo,
+    )
+    if match:
+        return re.sub(r"\s*[-–—/]\s*", " - ", match.group(1)).upper()
+    match_p = re.search(r"(?i)(?:\d{1,2}p)(?:\s+(?:\d{1,2}p)){1,11}", grezzo)
+    if match_p:
+        pezzi = [p[:-1] if p.lower().endswith("p") else p for p in match_p.group(0).split()]
+        return " - ".join(pezzi)
+    return ""
+
+
 def _estrai_ultimi_arrivi_da_blocco(linee: list[str]) -> str:
     for indice, riga in enumerate(linee):
         match = ULTIMI_ARRIVI_PARTENTE_RE.search(riga)
         if match is None:
             continue
         inline = str(match.group("ultimi") or "").strip()
-        if inline and FORMA_PARTENTE_RE.fullmatch(inline):
-            return re.sub(r"\s*[-–—]\s*", " - ", inline).upper()
+        forma_inline = _normalizza_forma_partente(inline)
+        if forma_inline:
+            return forma_inline
 
         verticali: list[str] = []
         for successiva in linee[indice + 1 : indice + 15]:
@@ -223,19 +262,22 @@ def _estrai_ultimi_arrivi_da_blocco(linee: list[str]) -> str:
                 r"(?i)\bmetri\b", testo
             ):
                 continue
-            if FORMA_PARTENTE_RE.fullmatch(testo) and (
-                "-" in testo or "–" in testo or "—" in testo or len(testo) > 2
-            ):
-                return re.sub(r"\s*[-–—]\s*", " - ", testo).upper()
+            forma_riga = _normalizza_forma_partente(testo)
+            if forma_riga and ("-" in forma_riga or len(forma_riga) > 2):
+                return forma_riga
             if FORMA_TOKEN_PARTENTE_RE.fullmatch(testo):
-                verticali.append(testo.upper())
+                tok = testo[:-1] if re.fullmatch(r"\d{1,2}[pP]", testo) else testo
+                verticali.append(tok.upper() if not tok.isdigit() else tok)
                 continue
             if SEPARATORE_FORMA_PARTENTE_RE.fullmatch(testo):
                 continue
             break
         if verticali:
             return " - ".join(verticali)
-        return ""
+    for riga in linee:
+        forma = _normalizza_forma_partente(riga.strip())
+        if forma and (" - " in forma or (forma.isdigit() and len(forma) >= 3)):
+            return forma
     return ""
 
 
@@ -245,7 +287,7 @@ def _estrai_rating_da_blocco(linee: list[str]) -> float | None:
         if match is None:
             continue
         try:
-            return float(match.group("rating").replace(",", "."))
+            return float(str(match.group("rating")).replace(",", ".").replace(" ", ""))
         except ValueError:
             return None
     return None
@@ -413,6 +455,7 @@ def partente_grezzo_a_record_dict(partente: PartenteGaraGrezzo) -> dict[str, obj
         "eta": partente.eta,
         "rating": partente.rating,
         "ultimi_arrivi": partente.ultimi_arrivi,
+        "forma_storica": partente.ultimi_arrivi,
         "quote_valide": quote_valide,
         "blocco": partente.blocco,
     }
