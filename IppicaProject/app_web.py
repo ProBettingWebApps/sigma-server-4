@@ -148,32 +148,34 @@ DATI_GARA_COLUMNS = [
 ]
 
 # Intestazione partente a 3 righe: Numero / Codice gabbia / Nome
-NUMERO_PARTENTE_RIGA_RE = re.compile(r"^\s*(?P<numero>\d{1,2})\s*$")
+# Regex tolleranti a spazi extra, tabulazioni e copia-incolla irregolare.
+NUMERO_PARTENTE_RIGA_RE = re.compile(r"^[ \t]*(?P<numero>\d{1,2})[ \t]*$")
 CODICE_GABBIA_RIGA_RE = re.compile(
-    r"^\s*(?P<codice>[A-Za-z]\d{1,2}|G\d{1,2})\s*$"
+    r"^[ \t]*(?P<codice>[A-Za-z][ \t]*\d{1,2}|G[ \t]*\d{1,2})[ \t]*$",
+    re.IGNORECASE,
 )
 NOME_CAVALLO_RIGA_RE = re.compile(
-    r"^\s*(?P<nome>[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9'\.\- ]{1,80})\s*$"
+    r"^[ \t]*(?P<nome>[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9'\.\- /]{1,80})[ \t]*$"
 )
-AGE_RE = re.compile(r"(?i)\b(?P<eta>\d{1,2}YO)\b")
-RATING_RE = re.compile(r"(?i)Rating\s*:\s*(?P<rating>\d+(?:[.,]\d+)?)")
+AGE_RE = re.compile(r"(?i)\b(?P<eta>\d{1,2}[ \t]*YO)\b")
+RATING_RE = re.compile(r"(?i)Rating[ \t]*:[ \t]*(?P<rating>\d+(?:[ \t]*[.,][ \t]*\d+)?)")
 ULTIMI_ARRIVI_RE = re.compile(
-    r"(?i)Ultimi\s+arrivi\s*:?\s*(?P<ultimi>"
-    r"(?:\d{1,2}|[A-Za-z]{1,6})(?:\s*-\s*(?:\d{1,2}|[A-Za-z]{1,6}))+"
+    r"(?i)Ultimi[ \t]+arrivi[ \t]*:?[ \t]*(?P<ultimi>"
+    r"(?:\d{1,2}|[A-Za-z]{1,6})(?:[ \t]*-[ \t]*(?:\d{1,2}|[A-Za-z]{1,6}))+"
     r"|\d+"
     r"|[A-Za-z]{1,6})"
 )
 FORMA_STORICA_SEQUENZA_RE = re.compile(
     r"(?i)\b(?P<form>(?:\d{1,2}|[A-Za-z]{1,6})"
-    r"(?:\s*-\s*(?:\d{1,2}|[A-Za-z]{1,6}))+)\b"
+    r"(?:[ \t]*-[ \t]*(?:\d{1,2}|[A-Za-z]{1,6}))+)\b"
 )
-QUOTA_DECIMALE_RE = re.compile(r"\b\d+[.,]\d{1,2}\b")
-ULTIMI_ARRIVI_ETICHETTA_RE = re.compile(r"(?i)ultimi\s+arrivi")
+QUOTA_DECIMALE_RE = re.compile(r"(?<![\d.,])\d+[ \t]*[.,][ \t]*\d{1,2}(?![\d])")
+ULTIMI_ARRIVI_ETICHETTA_RE = re.compile(r"(?i)ultimi[ \t]+arrivi")
 DICITURA_RITIRO_PARTENTE_RE = re.compile(
-    r"(?i)(?:\bnon\s+partente\b|\britirat[oa]\b)"
+    r"(?i)(?:\bnon[ \t]+partente\b|\britirat[oa]\b)"
 )
 PESO_KG_RIGA_RE = re.compile(r"(?i)\bkg\b")
-RIGA_METRI_DISTANZA_RE = re.compile(r"(?i)^\s*\d{3,5}\s*metri\s*$")
+RIGA_METRI_DISTANZA_RE = re.compile(r"(?i)^[ \t]*\d{3,5}[ \t]*metri[ \t]*$")
 ULTIMI_ARRIVO_LETTERALE_RE = re.compile(r"(?i)^[A-Z]{1,6}$")
 QUANTA_PENALITA_ARRIVO_LETTERALE = 99.0
 PUNTI_ARRIVO_FORMA_STORICA = {
@@ -187,7 +189,7 @@ MAX_PUNTI_ARRIVO_FORMA = 10.0
 # Galoppo: massimo 2 colonne utili per partente (Vincente + Piazzato).
 MAX_QUOTE_MERCATO_UTILI = 2
 IPPODROMO_CORSA_RE = re.compile(
-    r"(?P<ippodromo_corsa>[^\n\r]+?\s*/\s*Corsa\s+\d+)",
+    r"(?P<ippodromo_corsa>[^\n\r]+?[ \t]*/[ \t]*Corsa[ \t]+\d+)",
     re.IGNORECASE,
 )
 DATA_GARA_INTESTAZIONE_RE = re.compile(
@@ -195,29 +197,79 @@ DATA_GARA_INTESTAZIONE_RE = re.compile(
 )
 # Orario gara SOLO subito dopo la data (stessa riga o riga successiva), mai il primo HH:MM del testo.
 DATA_ORARIO_GARA_ANCORATO_RE = re.compile(
-    r"(?P<data>\d{2}/\d{2}/\d{4})\s+(?P<orario>\d{1,2}:\d{2})\b",
+    r"(?P<data>\d{1,2}/\d{1,2}/\d{2,4})[ \t]+(?P<orario>\d{1,2}:\d{2})\b",
     re.DOTALL,
 )
-RIGA_DATA_GARA_RE = re.compile(r"^\s*(?P<data>\d{1,2}/\d{1,2}/\d{4})\s*$")
-RIGA_ORARIO_GARA_RE = re.compile(r"^\s*(?P<orario>\d{1,2}:\d{2})\s*$")
+RIGA_DATA_GARA_RE = re.compile(r"^[ \t]*(?P<data>\d{1,2}/\d{1,2}/\d{4})[ \t]*$")
+RIGA_ORARIO_GARA_RE = re.compile(r"^[ \t]*(?P<orario>\d{1,2}:\d{2})[ \t]*$")
 DISTANZA_GARA_RE = re.compile(
-    r"(?is)Distanza\s*(?P<distanza>\d{3,5})"
+    r"(?is)Distanza[ \t:]*(?P<distanza>\d{3,5})"
 )
 PREMIO_GARA_RE = re.compile(
-    r"(?im)^Nome\s+premio\s*\r?\n\s*(?P<premio>.+?)\s*$"
+    r"(?im)^Nome[ \t]+premio[ \t]*\r?\n[ \t]*(?P<premio>.+?)[ \t]*$"
 )
 PREMIO_RIGA_DIRETTO_RE = re.compile(
-    r"(?im)^Premio\s+(?P<premio>.+?)\s*$"
+    r"(?im)^Premio[ \t]+(?P<premio>.+?)[ \t]*$"
 )
-RIGA_CORSA_NUMERO_RE = re.compile(r"(?i)^Corsa\s+(?P<numero>\d{1,2})\s*$")
-RIGA_TABella_ORARI_PALINSESTO_RE = re.compile(
-    r"^\s*(?P<ordine>\d{1,2})\s+(?P<orario>\d{1,2}:\d{2})\s*$"
+RIGA_CORSA_NUMERO_RE = re.compile(
+    r"(?i)^[ \t]*Corsa[ \t]+(?P<numero>\d{1,2})[ \t]*$"
+)
+RIGA_TABELLA_ORARI_PALINSESTO_RE = re.compile(
+    r"^[ \t]*(?P<ordine>\d{1,2})[ \t]+(?P<orario>\d{1,2}:\d{2})[ \t]*$"
 )
 PARTENTE_BLOCCO_HEADER_RE = re.compile(
     r"(?m)^[ \t]*(?P<numero>(?:[1-9]|1[0-2]))[ \t]*\r?\n"
     r"(?:[ \t]*\r?\n)*"
-    r"(?:(?P<gabbia>G\d{1,2}|[A-Za-z]\d{1,2})[ \t]*\r?\n[ \t]*)?"
+    r"(?:(?P<gabbia>G[ \t]*\d{1,2}|[A-Za-z][ \t]*\d{1,2})[ \t]*\r?\n[ \t]*)?"
 )
+
+
+def _normalizza_spazi_copia_incolla(testo: str) -> str:
+    """Tab, NBSP e spazi multipli → spazi singoli, senza alterare i valori."""
+    testo = str(testo or "").replace("\r\n", "\n").replace("\r", "\n")
+    testo = testo.replace("\ufeff", "")
+    linee_out: list[str] = []
+    for riga in testo.split("\n"):
+        riga = riga.replace("\xa0", " ").replace("\u202f", " ").replace("\t", " ")
+        riga = re.sub(r" {2,}", " ", riga)
+        linee_out.append(riga)
+    return "\n".join(linee_out)
+
+
+def _float_da_testo_quota(testo: str) -> float:
+    compact = re.sub(r"[ \t]", "", str(testo).replace(",", "."))
+    return float(compact)
+
+
+def _eta_normalizzata(match_eta: re.Match[str] | None) -> str:
+    if match_eta is None:
+        return ""
+    return re.sub(r"[ \t]", "", match_eta.group("eta")).upper()
+
+
+def _segnala_errore_parsing(
+    step: str,
+    numero_riga: int | None,
+    riga_testo: str,
+    exc: BaseException,
+) -> None:
+    """Mostra in UI lo step fallito, la riga esatta e l'eccezione Python."""
+    riga_vis = str(riga_testo).rstrip("\n")
+    if not riga_vis.strip():
+        riga_vis = "(riga vuota)"
+    if numero_riga is not None:
+        messaggio = (
+            f"Errore nella lettura del {step} alla riga {numero_riga}. "
+            f"Riga di testo: {riga_vis}. "
+            f"Eccezione Python: {type(exc).__name__}: {exc}"
+        )
+    else:
+        messaggio = (
+            f"Errore nella lettura del {step}. "
+            f"Riga di testo: {riga_vis}. "
+            f"Eccezione Python: {type(exc).__name__}: {exc}"
+        )
+    st.error(messaggio)
 
 
 def estrai_corse_grezze(scheda_testo: str) -> list[Corsa]:
@@ -1646,13 +1698,13 @@ def _riga_e_nome_cavallo(riga: str) -> str | None:
     testo = riga.strip()
     if not testo:
         return None
-    if re.match(r"(?i)^(rating|ultimi\s+arrivi)\b", testo):
+    if re.match(r"(?i)^(rating|ultimi[ \t]+arrivi)\b", testo):
         return None
     if RIGA_METRI_DISTANZA_RE.fullmatch(testo):
         return None
-    if re.fullmatch(r"\d{1,2}YO", testo, flags=re.IGNORECASE):
+    if re.fullmatch(r"\d{1,2}[ \t]*YO", testo, flags=re.IGNORECASE):
         return None
-    if re.fullmatch(r"\d+[.,]\d{1,2}", testo):
+    if QUOTA_DECIMALE_RE.fullmatch(testo):
         return None
     match = NOME_CAVALLO_RIGA_RE.fullmatch(testo)
     if not match:
@@ -1729,7 +1781,7 @@ def _decimali_quota_in_riga(riga: str) -> list[float]:
     trovati: list[float] = []
     for match in QUOTA_DECIMALE_RE.finditer(riga):
         try:
-            trovati.append(float(match.group(0).replace(",", ".")))
+            trovati.append(_float_da_testo_quota(match.group(0)))
         except ValueError:
             continue
     return trovati
@@ -1750,7 +1802,7 @@ def _decimali_quota_riga_senza_soglia(riga: str) -> list[float]:
     trovati: list[float] = []
     for match in QUOTA_DECIMALE_RE.finditer(riga):
         try:
-            trovati.append(float(match.group(0).replace(",", ".")))
+            trovati.append(_float_da_testo_quota(match.group(0)))
         except ValueError:
             continue
     return trovati
@@ -1996,7 +2048,7 @@ def _estrai_rating_blocco(blocco: str) -> float | None:
     if rating_match is None:
         return None
     try:
-        return float(rating_match.group("rating").replace(",", "."))
+        return _float_da_testo_quota(rating_match.group("rating"))
     except ValueError:
         return None
 
@@ -2100,10 +2152,12 @@ def _statistiche_mercato_da_dataframe(df: pd.DataFrame) -> dict[str, object]:
     return {"quota_media": quota_media, "quote_scartate": None}
 
 
-RIGA_SOLO_NUMERO_PARTENTE_RE = re.compile(r"^\s*(\d{1,2})\s*$")
-RIGA_ULTIMI_ARRIVI_ESATTA_RE = re.compile(r"(?i)^Ultimi\s+arrivi\s*$")
+RIGA_SOLO_NUMERO_PARTENTE_RE = re.compile(r"^[ \t]*(\d{1,2})[ \t]*$")
+RIGA_ULTIMI_ARRIVI_ESATTA_RE = re.compile(
+    r"(?i)^[ \t]*Ultimi[ \t]+arrivi[ \t]*:?[ \t]*$"
+)
 RIGA_ANCORA_SESSO_ETA_RE = re.compile(
-    r"\|\s*(Femmina|Maschio|Castrone)\s*\|\s*\d+YO",
+    r"[|¦]?[ \t]*(Femmina|Maschio|Castrone)[ \t]*[|¦][ \t]*\d{1,2}[ \t]*YO",
     re.IGNORECASE,
 )
 
@@ -2341,7 +2395,7 @@ def _rimuovi_blocchi_partenti_ritirati(linee: list[str]) -> list[str]:
 
 def _preprocess_testo_incollato_gara(testo: str) -> str:
     """Normalizzazione pre-parser: compattazione verticale e filtro ritirati."""
-    grezzo = testo.strip()
+    grezzo = _normalizza_spazi_copia_incolla(testo).strip()
     if not grezzo:
         return ""
     linee = grezzo.splitlines()
@@ -2454,7 +2508,7 @@ def _quote_decimali_riga_index_scan_yo(riga: str) -> list[float]:
     trovate: list[float] = []
     for match in QUOTA_DECIMALE_RE.finditer(riga):
         try:
-            quota = float(match.group(0).replace(",", "."))
+            quota = _float_da_testo_quota(match.group(0))
         except ValueError:
             continue
         if quota >= 1.60:
@@ -2478,55 +2532,70 @@ def _parse_partenti_index_scan_yo(testo: str) -> list[dict[str, object]]:
 
     lista: list[dict[str, object]] = []
     for pos, indice_yo in enumerate(indici_yo):
-        indice_yo_prec = _indice_yo_precedente(indici_yo, pos)
-        limite_avanti = indici_yo[pos + 1] if pos + 1 < len(indici_yo) else len(righe)
-
-        nome = _nome_cavallo_index_scan_yo(righe, indice_yo, indice_yo_prec)
-        numero = _numero_partente_index_scan_yo(righe, indice_yo, indice_yo_prec)
-        if not nome:
-            continue
-
-        ultimi = ""
-        quote: list[float] = []
-        cursore = indice_yo + 1
-        while cursore < limite_avanti:
-            parsed = _parse_ultimi_arrivi_da_riga(righe, cursore)
-            if parsed is not None:
-                ultimi, cursore = parsed
-                quote = _raccogli_quote_partente_da_righe(
-                    righe, cursore, limite_avanti
-                )
-                break
-            cursore += 1
-
-        if not quote:
-            continue
-
-        indice_inizio = indice_yo_prec + 1 if indice_yo_prec >= 0 else 0
-        for j in range(indice_yo - 1, indice_inizio - 1, -1):
-            if _numero_partente_da_riga_contesto(righe, j) is not None:
-                indice_inizio = j
-                break
-        blocco = "\n".join(righe[indice_inizio:limite_avanti])
-        eta_match = AGE_RE.search(righe[indice_yo])
-
-        forma_storica = _normalizza_forma_storica(ultimi)
-        if not forma_storica:
-            forma_storica = _estrai_forma_storica_da_righe(
-                blocco.splitlines(), 0
+        riga_yo = righe[indice_yo]
+        numero_riga = indice_yo + 1
+        step = "Nome Cavallo"
+        try:
+            indice_yo_prec = _indice_yo_precedente(indici_yo, pos)
+            limite_avanti = (
+                indici_yo[pos + 1] if pos + 1 < len(indici_yo) else len(righe)
             )
-        lista.append(
-            {
-                "numero": numero,
-                "nome": nome,
-                "ultimi_arrivi": forma_storica or ultimi,
-                "forma_storica": forma_storica or ultimi,
-                "quote_valide": quote,
-                "blocco": blocco,
-                "eta": eta_match.group("eta").upper() if eta_match else "",
-                "rating": _estrai_rating_blocco(blocco),
-            }
-        )
+
+            nome = _nome_cavallo_index_scan_yo(righe, indice_yo, indice_yo_prec)
+            if not nome:
+                continue
+            step = "Numero Partente"
+            numero = _numero_partente_index_scan_yo(
+                righe, indice_yo, indice_yo_prec
+            )
+
+            step = "Ultimi Arrivi"
+            ultimi = ""
+            quote: list[float] = []
+            cursore = indice_yo + 1
+            while cursore < limite_avanti:
+                parsed = _parse_ultimi_arrivi_da_riga(righe, cursore)
+                if parsed is not None:
+                    ultimi, cursore = parsed
+                    step = "Quote Valide"
+                    quote = _raccogli_quote_partente_da_righe(
+                        righe, cursore, limite_avanti
+                    )
+                    break
+                cursore += 1
+
+            step = "Quote Valide"
+            if not quote:
+                continue
+
+            indice_inizio = indice_yo_prec + 1 if indice_yo_prec >= 0 else 0
+            for j in range(indice_yo - 1, indice_inizio - 1, -1):
+                if _numero_partente_da_riga_contesto(righe, j) is not None:
+                    indice_inizio = j
+                    break
+            blocco = "\n".join(righe[indice_inizio:limite_avanti])
+            eta_match = AGE_RE.search(righe[indice_yo])
+
+            forma_storica = _normalizza_forma_storica(ultimi)
+            if not forma_storica:
+                forma_storica = _estrai_forma_storica_da_righe(
+                    blocco.splitlines(), 0
+                )
+            lista.append(
+                {
+                    "numero": numero,
+                    "nome": nome,
+                    "ultimi_arrivi": forma_storica or ultimi,
+                    "forma_storica": forma_storica or ultimi,
+                    "quote_valide": quote,
+                    "blocco": blocco,
+                    "eta": _eta_normalizzata(eta_match),
+                    "rating": _estrai_rating_blocco(blocco),
+                }
+            )
+        except Exception as exc:
+            _segnala_errore_parsing(step, numero_riga, riga_yo, exc)
+            continue
 
     return lista
 
@@ -2561,7 +2630,7 @@ def _quote_decimali_riga_macchina_stati(riga: str) -> list[float]:
     trovate: list[float] = []
     for match in QUOTA_DECIMALE_RE.finditer(riga):
         try:
-            trovate.append(float(match.group(0).replace(",", ".")))
+            trovate.append(_float_da_testo_quota(match.group(0)))
         except ValueError:
             continue
     return trovate
@@ -2573,36 +2642,47 @@ def _salva_cavallo_macchina_stati(
 ) -> None:
     if not cavallo:
         return
-    quote_raw = list(cavallo.get("quote") or [])
-    quote: list[float] = []
-    for elemento in quote_raw:
-        try:
-            quote.append(float(elemento))
-        except (TypeError, ValueError):
-            continue
-    quote = _quote_vincente_piazzato_galoppo(quote[:MAX_QUOTE_MERCATO_UTILI])
-    nome = str(cavallo.get("nome") or "").strip()
-    if not nome or not quote:
-        return
-    numero = cavallo.get("numero")
-    blocco = "\n".join(str(r) for r in cavallo.get("righe_blocco") or [])
-    eta_match = AGE_RE.search(blocco)
-    ultimi_raw = str(cavallo.get("ultimi") or "").strip()
-    forma_storica = _normalizza_forma_storica(ultimi_raw)
-    if not forma_storica:
-        forma_storica = _estrai_forma_storica_da_righe(blocco.splitlines(), 0)
-    lista.append(
-        {
-            "numero": numero,
-            "nome": nome,
-            "ultimi_arrivi": forma_storica or ultimi_raw,
-            "forma_storica": forma_storica or ultimi_raw,
-            "quote_valide": quote,
-            "blocco": blocco,
-            "eta": eta_match.group("eta").upper() if eta_match else "",
-            "rating": _estrai_rating_blocco(blocco),
-        }
-    )
+    step = "Nome Cavallo"
+    prima_riga = ""
+    try:
+        righe_blocco = cavallo.get("righe_blocco") or []
+        if isinstance(righe_blocco, list) and righe_blocco:
+            prima_riga = str(righe_blocco[0])
+        quote_raw = list(cavallo.get("quote") or [])
+        quote: list[float] = []
+        for elemento in quote_raw:
+            try:
+                quote.append(float(elemento))
+            except (TypeError, ValueError):
+                continue
+        step = "Quote Valide"
+        quote = _quote_vincente_piazzato_galoppo(quote[:MAX_QUOTE_MERCATO_UTILI])
+        nome = str(cavallo.get("nome") or "").strip()
+        if not nome or not quote:
+            return
+        numero = cavallo.get("numero")
+        blocco = "\n".join(str(r) for r in cavallo.get("righe_blocco") or [])
+        eta_match = AGE_RE.search(blocco)
+        ultimi_raw = str(cavallo.get("ultimi") or "").strip()
+        forma_storica = _normalizza_forma_storica(ultimi_raw)
+        if not forma_storica:
+            forma_storica = _estrai_forma_storica_da_righe(blocco.splitlines(), 0)
+        lista.append(
+            {
+                "numero": numero,
+                "nome": nome,
+                "ultimi_arrivi": forma_storica or ultimi_raw,
+                "forma_storica": forma_storica or ultimi_raw,
+                "quote_valide": quote,
+                "blocco": blocco,
+                "eta": _eta_normalizzata(eta_match),
+                "rating": _estrai_rating_blocco(blocco),
+            }
+        )
+    except Exception as exc:
+        riga_num = cavallo.get("numero")
+        numero_riga = int(riga_num) if isinstance(riga_num, int) else None
+        _segnala_errore_parsing(step, numero_riga, prima_riga, exc)
 
 
 def _parse_partenti_macchina_stati(testo: str) -> list[dict[str, object]]:
@@ -2625,91 +2705,104 @@ def _parse_partenti_macchina_stati(testo: str) -> list[dict[str, object]]:
         riga_raw = linee[indice]
         testo_riga = riga_raw.strip()
         indice += 1
+        step = "Numero Partente"
+        try:
+            indice_riga = indice - 1
+            numero = _numero_partente_da_riga_contesto(linee, indice_riga)
+            if numero is not None and stato in ("cerca_numero", "quote"):
+                _salva_cavallo_macchina_stati(lista, cavallo)
+                cavallo = {
+                    "numero": numero,
+                    "nome": "",
+                    "ultimi": "",
+                    "quote": [],
+                    "righe_blocco": [riga_raw],
+                }
+                stato = "cerca_ancora_sesso"
+                continue
 
-        indice_riga = indice - 1
-        numero = _numero_partente_da_riga_contesto(linee, indice_riga)
-        if numero is not None and stato in ("cerca_numero", "quote"):
-            _salva_cavallo_macchina_stati(lista, cavallo)
-            cavallo = {
-                "numero": numero,
-                "nome": "",
-                "ultimi": "",
-                "quote": [],
-                "righe_blocco": [riga_raw],
-            }
-            stato = "cerca_ancora_sesso"
-            continue
+            if not testo_riga:
+                if cavallo is not None:
+                    righe = cavallo.setdefault("righe_blocco", [])
+                    if isinstance(righe, list):
+                        righe.append(riga_raw)
+                continue
 
-        if not testo_riga:
             if cavallo is not None:
-                righe = cavallo.setdefault("righe_blocco", [])
-                if isinstance(righe, list):
-                    righe.append(riga_raw)
-            continue
+                righe_blocco = cavallo.setdefault("righe_blocco", [])
+                if isinstance(righe_blocco, list):
+                    righe_blocco.append(riga_raw)
 
-        if cavallo is not None:
-            righe_blocco = cavallo.setdefault("righe_blocco", [])
-            if isinstance(righe_blocco, list):
-                righe_blocco.append(riga_raw)
-
-        if cavallo is None:
-            if stato == "cerca_numero" and _riga_ignorata_macchina_stati(testo_riga):
+            if cavallo is None:
+                if stato == "cerca_numero" and _riga_ignorata_macchina_stati(testo_riga):
+                    continue
                 continue
-            continue
 
-        if stato == "quote":
-            if not _riga_esclusa_da_quote_macchina(testo_riga):
-                quote_riga = _quote_decimali_riga_macchina_stati(riga_raw)
-                if quote_riga:
-                    accumulo = cavallo.setdefault("quote", [])
-                    if isinstance(accumulo, list):
-                        for q in quote_riga:
-                            if len(accumulo) >= MAX_QUOTE_MERCATO_UTILI:
-                                break
-                            accumulo.append(q)
-            continue
-
-        if _riga_ignorata_macchina_stati(testo_riga):
-            continue
-
-        if stato == "cerca_ancora_sesso":
-            if CODICE_GABBIA_RIGA_RE.fullmatch(testo_riga) is not None:
+            if stato == "quote":
+                if not _riga_esclusa_da_quote_macchina(testo_riga):
+                    quote_riga = _quote_decimali_riga_macchina_stati(riga_raw)
+                    if quote_riga:
+                        accumulo = cavallo.setdefault("quote", [])
+                        if isinstance(accumulo, list):
+                            for q in quote_riga:
+                                if len(accumulo) >= MAX_QUOTE_MERCATO_UTILI:
+                                    break
+                                accumulo.append(q)
                 continue
-            if _riga_ancora_sesso_eta(testo_riga):
-                righe_b = cavallo.get("righe_blocco")
-                if isinstance(righe_b, list):
-                    cavallo["nome"] = _nome_cavallo_ancora_inversa_da_blocco(righe_b)
-                stato = "cerca_ultimi"
-            elif _riga_firma_yo_cavallo(testo_riga):
-                righe_b = cavallo.get("righe_blocco")
-                if isinstance(righe_b, list):
-                    righe_strip = [
-                        str(r).strip() for r in righe_b if str(r).strip()
-                    ]
-                    if righe_strip:
-                        nome_yo = _nome_cavallo_index_scan_yo(
-                            righe_strip, len(righe_strip) - 1, -1
-                        )
-                        if nome_yo:
-                            cavallo["nome"] = nome_yo
-                stato = "cerca_ultimi"
-            continue
 
-        if stato == "cerca_ultimi":
-            parsed = _parse_ultimi_arrivi_da_riga(linee, indice - 1)
-            if parsed is not None:
-                cavallo["ultimi"], _ = parsed
+            if _riga_ignorata_macchina_stati(testo_riga):
+                continue
+
+            if stato == "cerca_ancora_sesso":
+                step = "Nome Cavallo"
+                if CODICE_GABBIA_RIGA_RE.fullmatch(testo_riga) is not None:
+                    continue
+                if _riga_ancora_sesso_eta(testo_riga):
+                    righe_b = cavallo.get("righe_blocco")
+                    if isinstance(righe_b, list):
+                        cavallo["nome"] = _nome_cavallo_ancora_inversa_da_blocco(righe_b)
+                    stato = "cerca_ultimi"
+                elif _riga_firma_yo_cavallo(testo_riga):
+                    righe_b = cavallo.get("righe_blocco")
+                    if isinstance(righe_b, list):
+                        righe_strip = [
+                            str(r).strip() for r in righe_b if str(r).strip()
+                        ]
+                        if righe_strip:
+                            nome_yo = _nome_cavallo_index_scan_yo(
+                                righe_strip, len(righe_strip) - 1, -1
+                            )
+                            if nome_yo:
+                                cavallo["nome"] = nome_yo
+                    stato = "cerca_ultimi"
+                continue
+
+            if stato == "cerca_ultimi":
+                step = "Ultimi Arrivi"
+                parsed = _parse_ultimi_arrivi_da_riga(linee, indice - 1)
+                if parsed is not None:
+                    cavallo["ultimi"], _ = parsed
+                    stato = "quote"
+                elif RIGA_ULTIMI_ARRIVI_ESATTA_RE.fullmatch(testo_riga):
+                    stato = "ultimi_valore"
+                continue
+
+            if stato == "ultimi_valore":
+                step = "Ultimi Arrivi"
+                cavallo["ultimi"] = _normalizza_testo_ultimi_arrivi(testo_riga)
                 stato = "quote"
-            elif RIGA_ULTIMI_ARRIVI_ESATTA_RE.fullmatch(testo_riga):
-                stato = "ultimi_valore"
+                continue
+        except Exception as exc:
+            _segnala_errore_parsing(step, indice, riga_raw, exc)
+            cavallo = None
+            stato = "cerca_numero"
             continue
 
-        if stato == "ultimi_valore":
-            cavallo["ultimi"] = _normalizza_testo_ultimi_arrivi(testo_riga)
-            stato = "quote"
-            continue
-
-    _salva_cavallo_macchina_stati(lista, cavallo)
+    try:
+        _salva_cavallo_macchina_stati(lista, cavallo)
+    except Exception as exc:
+        ultima = linee[-1] if linee else ""
+        _segnala_errore_parsing("Nome Cavallo", len(linee), ultima, exc)
     return lista
 
 
@@ -2717,26 +2810,37 @@ def _parse_partenti_da_blocchi(testo: str) -> list[dict[str, object]]:
     """Fallback split per N° + gabbia opzionale (Galoppo) e trotto."""
     lista: list[dict[str, object]] = []
     for numero, nome, blocco in _split_blocchi_cavalli(testo):
-        quote, _scartate = _estrai_quote_blocco(blocco)
-        if not quote:
+        prima_riga = blocco.splitlines()[0] if blocco else ""
+        step = "Nome Cavallo"
+        try:
+            if not nome:
+                continue
+            step = "Quote Valide"
+            quote, _scartate = _estrai_quote_blocco(blocco)
+            if not quote:
+                continue
+            eta_match = AGE_RE.search(blocco)
+            ultimi_raw = _estrai_ultimi_arrivi_blocco(blocco)
+            forma_storica = _normalizza_forma_storica(ultimi_raw)
+            if not forma_storica:
+                forma_storica = _estrai_forma_storica_da_righe(
+                    blocco.splitlines(), 0
+                )
+            lista.append(
+                {
+                    "numero": numero,
+                    "nome": nome,
+                    "ultimi_arrivi": forma_storica or ultimi_raw,
+                    "forma_storica": forma_storica or ultimi_raw,
+                    "quote_valide": quote,
+                    "blocco": blocco,
+                    "eta": _eta_normalizzata(eta_match),
+                    "rating": _estrai_rating_blocco(blocco),
+                }
+            )
+        except Exception as exc:
+            _segnala_errore_parsing(step, numero, prima_riga, exc)
             continue
-        eta_match = AGE_RE.search(blocco)
-        ultimi_raw = _estrai_ultimi_arrivi_blocco(blocco)
-        forma_storica = _normalizza_forma_storica(ultimi_raw)
-        if not forma_storica:
-            forma_storica = _estrai_forma_storica_da_righe(blocco.splitlines(), 0)
-        lista.append(
-            {
-                "numero": numero,
-                "nome": nome,
-                "ultimi_arrivi": forma_storica or ultimi_raw,
-                "forma_storica": forma_storica or ultimi_raw,
-                "quote_valide": quote,
-                "blocco": blocco,
-                "eta": eta_match.group("eta").upper() if eta_match else "",
-                "rating": _estrai_rating_blocco(blocco),
-            }
-        )
     return lista
 
 
@@ -2745,94 +2849,106 @@ def _estrai_partenti_verticali(testo: str) -> pd.DataFrame:
     cavalli = []
     i = 0
     while i < len(lines):
-        # Cerca un numero (1-40) seguito da un Gate (inizia per G)
-        if lines[i].isdigit() and 1 <= int(lines[i]) <= 40:
-            if i + 1 < len(lines) and (
-                lines[i + 1].startswith("G") or lines[i + 1].isdigit()
-            ):
-                if i + 2 >= len(lines):
-                    i += 1
-                    continue
-                numero = lines[i]
-
-                offset_nome = 2
-                if lines[i + 2].strip().lower() in {"silks", "silk"}:
-                    offset_nome = 3
-                nome_idx = i + offset_nome
-                if nome_idx >= len(lines):
-                    i += 1
-                    continue
-                nome = lines[nome_idx].strip()
-                if not nome:
-                    i += 1
-                    continue
-
-                sesso_eta_idx = nome_idx + 1
-                sesso_eta = (
-                    lines[sesso_eta_idx].strip()
-                    if sesso_eta_idx < len(lines)
-                    else ""
-                )
-                eta = ""
-                if sesso_eta and AGE_RE.search(sesso_eta):
-                    eta = sesso_eta.strip()
-                    eta = re.sub(r"^\|+\s*", "", eta).strip()
-
-                # Controllo ritirati (fino a i+10 per allineamento post-silks)
-                ritirato = False
-                for j in range(1, 11):
-                    if i + j >= len(lines):
-                        break
-                    testo_check = lines[i + j].lower()
-                    if (
-                        "non partente" in testo_check
-                        or "ritirato" in testo_check
-                        or "ritirata" in testo_check
-                    ):
-                        ritirato = True
-                        break
-
-                if not ritirato:
-                    # Quota: primo decimale plausibile dopo nome/sesso (fino a i+10)
-                    quota_vincente = None
-                    limite_quota = min(len(lines), i + 11)
-                    for idx_line in range(sesso_eta_idx + 1, limite_quota):
-                        riga_quota = lines[idx_line]
-                        if re.search(r"kg", riga_quota, re.IGNORECASE):
-                            continue
-                        match_quota = QUOTA_DECIMALE_RE.search(riga_quota)
-                        if match_quota is None:
-                            continue
-                        try:
-                            val = float(match_quota.group(0).replace(",", "."))
-                        except ValueError:
-                            continue
-                        if val >= 1.01:
-                            quota_vincente = val
-                            break
-
-                    if quota_vincente is not None:
-                        forma_storica = _estrai_forma_storica_da_righe(
-                            lines, i, min(len(lines), i + 16)
-                        )
-                        cavalli.append(
-                            {
-                                "Numero": numero,
-                                "Nome": nome,
-                                "Quota": quota_vincente,
-                                "Età": eta,
-                                "Sesso_Eta": eta if eta else sesso_eta.strip(),
-                                "Forma_Storica": forma_storica,
-                                "Ultimi Arrivi": forma_storica,
-                                "Regression": None,
-                                "Quanta": None,
-                                "Rating": None,
-                                "Elastico": None,
-                            }
-                        )
-                i += 2
+        step = "Numero Partente"
+        try:
+            # Cerca un numero (1-40) seguito da un Gate (inizia per G)
+            if not (lines[i].isdigit() and 1 <= int(lines[i]) <= 40):
+                i += 1
                 continue
-        i += 1
+            gate = lines[i + 1] if i + 1 < len(lines) else ""
+            if i + 1 >= len(lines) or not (
+                CODICE_GABBIA_RIGA_RE.fullmatch(gate) is not None
+                or gate.upper().startswith("G")
+                or gate.isdigit()
+            ):
+                i += 1
+                continue
+            if i + 2 >= len(lines):
+                i += 1
+                continue
+            numero = lines[i]
+
+            offset_nome = 2
+            if lines[i + 2].strip().lower() in {"silks", "silk"}:
+                offset_nome = 3
+            nome_idx = i + offset_nome
+            if nome_idx >= len(lines):
+                i += 1
+                continue
+            step = "Nome Cavallo"
+            nome = lines[nome_idx].strip()
+            if not nome:
+                i += 1
+                continue
+
+            sesso_eta_idx = nome_idx + 1
+            sesso_eta = (
+                lines[sesso_eta_idx].strip()
+                if sesso_eta_idx < len(lines)
+                else ""
+            )
+            eta = ""
+            if sesso_eta and AGE_RE.search(sesso_eta):
+                eta = sesso_eta.strip()
+                eta = re.sub(r"^\|+\s*", "", eta).strip()
+
+            ritirato = False
+            for j in range(1, 11):
+                if i + j >= len(lines):
+                    break
+                testo_check = lines[i + j].lower()
+                if (
+                    "non partente" in testo_check
+                    or "ritirato" in testo_check
+                    or "ritirata" in testo_check
+                ):
+                    ritirato = True
+                    break
+
+            if not ritirato:
+                quota_vincente = None
+                limite_quota = min(len(lines), i + 11)
+                step = "Quote Valide"
+                for idx_line in range(sesso_eta_idx + 1, limite_quota):
+                    riga_quota = lines[idx_line]
+                    if re.search(r"kg", riga_quota, re.IGNORECASE):
+                        continue
+                    match_quota = QUOTA_DECIMALE_RE.search(riga_quota)
+                    if match_quota is None:
+                        continue
+                    try:
+                        val = _float_da_testo_quota(match_quota.group(0))
+                    except ValueError:
+                        continue
+                    if val >= 1.01:
+                        quota_vincente = val
+                        break
+
+                if quota_vincente is not None:
+                    forma_storica = _estrai_forma_storica_da_righe(
+                        lines, i, min(len(lines), i + 16)
+                    )
+                    cavalli.append(
+                        {
+                            "Numero": numero,
+                            "Nome": nome,
+                            "Quota": quota_vincente,
+                            "Età": eta,
+                            "Sesso_Eta": eta if eta else sesso_eta.strip(),
+                            "Forma_Storica": forma_storica,
+                            "Ultimi Arrivi": forma_storica,
+                            "Regression": None,
+                            "Quanta": None,
+                            "Rating": None,
+                            "Elastico": None,
+                        }
+                    )
+            i += 2
+            continue
+        except Exception as exc:
+            _segnala_errore_parsing(step, i + 1, lines[i] if i < len(lines) else "", exc)
+            i += 1
+            continue
 
     return pd.DataFrame(cavalli) if cavalli else pd.DataFrame()
 
@@ -2845,40 +2961,49 @@ def _dataframe_partenti_verticali_standard(testo: str) -> pd.DataFrame:
 
     righe: list[dict[str, object]] = []
     for _idx, riga in tabella.iterrows():
+        step = "Numero Partente"
         try:
             numero = int(riga["Numero"])
-        except (TypeError, ValueError, KeyError):
-            continue
-        nome = _testo_cella_riga(riga, "Nome")
-        if not nome:
-            continue
-        try:
-            quota = float(riga["Quota"])
-        except (TypeError, ValueError, KeyError):
-            quota = None
+            step = "Nome Cavallo"
+            nome = _testo_cella_riga(riga, "Nome")
+            if not nome:
+                continue
+            step = "Quote Valide"
+            try:
+                quota = float(riga["Quota"])
+            except (TypeError, ValueError, KeyError):
+                quota = None
 
-        quote_valide: list[float] = []
-        if quota is not None and not math.isnan(quota):
-            quote_valide.append(float(quota))
+            quote_valide: list[float] = []
+            if quota is not None and not math.isnan(quota):
+                quote_valide.append(float(quota))
 
-        eta_riga = _testo_cella_riga(riga, "Età")
-        if not eta_riga:
-            eta_riga = _testo_cella_riga(riga, "Sesso_Eta")
-        forma_storica = _testo_cella_riga(riga, "Forma_Storica")
-        if not forma_storica:
-            forma_storica = _testo_cella_riga(riga, "Ultimi Arrivi")
-        forma_storica = _normalizza_forma_storica(forma_storica)
-        righe.append(
-            _riga_dati_gara_standard(
-                numero,
-                nome,
-                eta=eta_riga,
-                rating=pd.NA,
-                ultimi_arrivi=forma_storica,
-                forma_storica=forma_storica,
-                quote_valide=quote_valide,
+            eta_riga = _testo_cella_riga(riga, "Età")
+            if not eta_riga:
+                eta_riga = _testo_cella_riga(riga, "Sesso_Eta")
+            forma_storica = _testo_cella_riga(riga, "Forma_Storica")
+            if not forma_storica:
+                forma_storica = _testo_cella_riga(riga, "Ultimi Arrivi")
+            forma_storica = _normalizza_forma_storica(forma_storica)
+            righe.append(
+                _riga_dati_gara_standard(
+                    numero,
+                    nome,
+                    eta=eta_riga,
+                    rating=pd.NA,
+                    ultimi_arrivi=forma_storica,
+                    forma_storica=forma_storica,
+                    quote_valide=quote_valide,
+                )
             )
-        )
+        except Exception as exc:
+            _segnala_errore_parsing(
+                step,
+                None,
+                str(riga.get("Nome") or riga.get("Numero") or ""),
+                exc,
+            )
+            continue
 
     if not righe:
         return _dataframe_dati_gara_vuoto()
@@ -2928,7 +3053,12 @@ def _dataframe_partenti_orizzontale(testo: str) -> pd.DataFrame:
         _parse_partenti_macchina_stati,
         _parse_partenti_da_blocchi,
     ):
-        records = parser(testo_pulito)
+        try:
+            records = parser(testo_pulito)
+        except Exception as exc:
+            prima = testo_pulito.splitlines()[0] if testo_pulito else ""
+            _segnala_errore_parsing(parser.__name__, 1, prima, exc)
+            records = []
         if records:
             break
 
@@ -2937,10 +3067,17 @@ def _dataframe_partenti_orizzontale(testo: str) -> pd.DataFrame:
 
     righe: list[dict[str, object]] = []
     for record in records:
-        if isinstance(record, dict) and "N°" in record:
-            righe.append(record)
-        else:
-            righe.append(_record_da_macchina_stati(record))
+        try:
+            if isinstance(record, dict) and "N°" in record:
+                righe.append(record)
+            else:
+                righe.append(_record_da_macchina_stati(record))
+        except Exception as exc:
+            nome_rec = ""
+            if isinstance(record, dict):
+                nome_rec = str(record.get("nome") or record.get("Nome") or "")
+            _segnala_errore_parsing("Nome Cavallo", None, nome_rec, exc)
+            continue
     if not righe:
         return _dataframe_dati_gara_vuoto()
     return _normalizza_dataframe_partenti(pd.DataFrame(righe))
@@ -3014,38 +3151,73 @@ def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
     ippica_inserimento, preservando Rating, forma e quote per ogni partente.
     Le quote sotto la soglia Sigma vengono escluse prima di ogni calcolo.
     """
-    testo_originale = testo.strip()
+    testo_originale = _normalizza_spazi_copia_incolla(testo).strip()
     if not testo_originale:
         return _dataframe_dati_gara_vuoto()
 
     righe_condivise: list[dict[str, object]] = []
-    for partente in parse_partenti_testo_grezzo(testo_originale):
-        record = partente_grezzo_a_record_dict(partente)
-        righe_condivise.append(_record_da_macchina_stati(record))
+    partenti_condivisi: list[object] = []
+    try:
+        partenti_condivisi = list(parse_partenti_testo_grezzo(testo_originale))
+    except Exception as exc:
+        prima = testo_originale.splitlines()[0] if testo_originale else ""
+        _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+        partenti_condivisi = []
+
+    for partente in partenti_condivisi:
+        try:
+            record = partente_grezzo_a_record_dict(partente)
+            righe_condivise.append(_record_da_macchina_stati(record))
+        except Exception as exc:
+            nome_p = getattr(partente, "nome", "")
+            num_p = getattr(partente, "numero", None)
+            _segnala_errore_parsing("Nome Cavallo", num_p, str(nome_p), exc)
+            continue
 
     if righe_condivise:
         df_blindato = pd.DataFrame(righe_condivise)
     else:
-        # I parser locali coprono impaginazioni bookmaker alternative, ma
-        # producono lo stesso schema completo del parser condiviso.
-        df_blindato = _dataframe_partenti_orizzontale(testo_originale)
+        df_blindato = _dataframe_dati_gara_vuoto()
+        try:
+            df_blindato = _dataframe_partenti_orizzontale(testo_originale)
+        except Exception as exc:
+            prima = testo_originale.splitlines()[0] if testo_originale else ""
+            _segnala_errore_parsing("Dati partenti", 1, prima, exc)
         if df_blindato.empty:
-            df_blindato = _dataframe_partenti_verticali_standard(testo_originale)
+            try:
+                df_blindato = _dataframe_partenti_verticali_standard(testo_originale)
+            except Exception as exc:
+                prima = testo_originale.splitlines()[0] if testo_originale else ""
+                _segnala_errore_parsing("Dati partenti", 1, prima, exc)
         if df_blindato.empty:
-            df_blindato = estrai_dati(testo_originale)
+            try:
+                df_blindato = estrai_dati(testo_originale)
+            except Exception as exc:
+                prima = testo_originale.splitlines()[0] if testo_originale else ""
+                _segnala_errore_parsing("Dati partenti", 1, prima, exc)
 
-    if df_blindato.empty:
+    if df_blindato is None or getattr(df_blindato, "empty", True):
         return _dataframe_dati_gara_vuoto()
 
     df_normalizzato = _normalizza_dataframe_partenti(df_blindato)
     righe_valide: list[pd.Series] = []
     for _indice, riga in df_normalizzato.iterrows():
-        quote = _parse_quote_valide_cella(riga.get("Quote Valide"))
-        if not quote:
+        step = "Quote Valide"
+        try:
+            quote = _parse_quote_valide_cella(riga.get("Quote Valide"))
+            if not quote:
+                continue
+            riga_filtrata = riga.copy()
+            riga_filtrata["Quote Valide"] = " | ".join(f"{q:.2f}" for q in quote)
+            righe_valide.append(riga_filtrata)
+        except Exception as exc:
+            _segnala_errore_parsing(
+                step,
+                None,
+                str(riga.get("Nome") or ""),
+                exc,
+            )
             continue
-        riga_filtrata = riga.copy()
-        riga_filtrata["Quote Valide"] = " | ".join(f"{q:.2f}" for q in quote)
-        righe_valide.append(riga_filtrata)
 
     if not righe_valide:
         return _dataframe_dati_gara_vuoto()
@@ -3057,14 +3229,23 @@ def parse_gara_completa(
     testo: str,
 ) -> tuple[dict[str, str], pd.DataFrame]:
     """Intestazione gara + partenti estratti dallo stesso blocco grezzo."""
-    testo_grezzo = testo.strip()
+    testo_grezzo = _normalizza_spazi_copia_incolla(testo).strip()
     if not testo_grezzo:
         return _intestazione_gara_vuota(), _dataframe_dati_gara_vuoto()
-    testo_pulito = _testo_gara_preparato(testo_grezzo)
-    return (
-        parse_intestazione_gara(testo_pulito),
-        parse_dati_gara_grezzi(testo_grezzo),
-    )
+    intestazione = _intestazione_gara_vuota()
+    tabella = _dataframe_dati_gara_vuoto()
+    try:
+        testo_pulito = _testo_gara_preparato(testo_grezzo)
+        intestazione = parse_intestazione_gara(testo_pulito)
+    except Exception as exc:
+        prima = testo_grezzo.splitlines()[0] if testo_grezzo else ""
+        _segnala_errore_parsing("Intestazione gara", 1, prima, exc)
+    try:
+        tabella = parse_dati_gara_grezzi(testo_grezzo)
+    except Exception as exc:
+        prima = testo_grezzo.splitlines()[0] if testo_grezzo else ""
+        _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+    return intestazione, tabella
 
 
 def _init_archivio_gare_sigma() -> None:
@@ -5821,7 +6002,15 @@ def _render_inserimento_dati_gara() -> None:
                 st.error("⚠️ Nessun testo rilevato. Incolla i dati.")
             else:
                 st.info(f"✅ Letto un blocco di {len(testo_incollato.splitlines())} righe. Inizio analisi...")
-                intestazione, tabella = parse_gara_completa(testo_incollato)
+                try:
+                    intestazione, tabella = parse_gara_completa(testo_incollato)
+                except Exception as exc:
+                    prima = testo_incollato.splitlines()[0] if testo_incollato else ""
+                    _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+                    intestazione, tabella = (
+                        _intestazione_gara_vuota(),
+                        _dataframe_dati_gara_vuoto(),
+                    )
                 if tabella.empty:
                     st.warning(
                         "Assenza di dati - Nessun cavallo riconosciuto "
