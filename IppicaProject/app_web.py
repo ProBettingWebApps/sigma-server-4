@@ -4414,7 +4414,7 @@ def _calcola_global_star_rating(
         edge_pts = max(0.0, min(0.28, scarto_prob)) / 0.28 * 55.0
 
     if spread_elastico is None and p_sigma is None:
-        return None
+        return max(0.0, min(100.0, p_mercato * 100.0))
 
     return max(0.0, min(100.0, spread_pts + edge_pts))
 
@@ -5102,6 +5102,19 @@ def _overround_lavagna_corsa(df: pd.DataFrame) -> float | None:
     return overround
 
 
+def _probabilita_implicita_normalizzata(
+    quota_vincente: float | None,
+    overround: float | None,
+) -> float | None:
+    """Probabilità implicita della quota vincente ≥ 1.60, normalizzata all'overround."""
+    if quota_vincente is None or quota_vincente < SOGLIA_QUOTA_VINCENTE_SIGMA:
+        return None
+    p_raw = 1.0 / float(quota_vincente)
+    if overround is not None and overround > 0:
+        p_raw = p_raw / float(overround)
+    return max(0.0, min(1.0, p_raw))
+
+
 def _fair_odds_da_sigma(sigma_score: float | None) -> float | None:
     """Quota equa derivata dalla probabilità Sigma, non dalla quota bookmaker."""
     if sigma_score is None or sigma_score <= 0:
@@ -5252,10 +5265,13 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
             spread_reg_quanta = None
 
         # Modulo Elastico: priorità su anomalia Rating alto + quota alta;
-        # se manca il Rating ma c'è lo storico e quote ≥ 1.60, usa i moduli già calcolati.
+        # senza Rating/Storico (es. Maiden) interviene sulle quote ≥ 1.60.
         elastico = 0.0
         label_anomalia = "Assenza di dati"
         alert_elastico = False
+        p_fair = _probabilita_implicita_normalizzata(
+            quota_max, overround_lavagna
+        )
         rating_ok = False
         try:
             rating_ok = rating is not None and not pd.isna(rating)
@@ -5289,6 +5305,13 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
                 )
                 elastico = max(0.0, min(100.0, base_mod))
                 label_anomalia = "Discrepanza lieve"
+        elif quote:
+            elastico = max(
+                0.0,
+                min(100.0, (p_fair if p_fair is not None else 0.0) * 100.0),
+            )
+            label_anomalia = "Anomalia elastica (statistica assente — mercato)"
+            alert_elastico = elastico > 0.0
         elif not quote:
             label_anomalia = "Assenza di quote valide ≥ 1.60"
 
@@ -5298,18 +5321,32 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
         if quanta is not None:
             moduli_validi.append((quanta, 0.25))
 
-        if not moduli_validi and elastico <= 0:
+        n_mercato = len(quote_massime_valide)
+        tilt_mercato = 0.0
+        if p_fair is not None and n_mercato > 0:
+            tilt_mercato = max(0.0, min(1.0, p_fair * float(n_mercato)))
+
+        if not quote:
             sigma = None
             densita = 0.0
             tilt = 0.0
+        elif not moduli_validi:
+            sigma = elastico
+            if is_favorito_assoluto:
+                sigma = min(100.0, sigma + 12.0)
+            if quota_max is not None:
+                if quota_max > 40.0:
+                    sigma = min(sigma, 25.0)
+                elif quota_max > 25.0:
+                    sigma = min(sigma, 45.0)
+            sigma = max(0.0, min(100.0, sigma))
+            densita = sigma / 100.0
+            tilt = tilt_mercato if tilt_mercato > 0 else densita
         else:
-            if moduli_validi:
-                peso_tot = sum(peso for _val, peso in moduli_validi)
-                base_sigma = (
-                    sum(val * peso for val, peso in moduli_validi) / peso_tot
-                )
-            else:
-                base_sigma = 0.0
+            peso_tot = sum(peso for _val, peso in moduli_validi)
+            base_sigma = (
+                sum(val * peso for val, peso in moduli_validi) / peso_tot
+            )
             sigma = base_sigma
             if elastico > base_sigma:
                 sigma = (base_sigma * 0.45) + (elastico * 0.55)
@@ -5318,7 +5355,6 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
             sigma = max(0.0, min(100.0, sigma))
             if is_favorito_assoluto:
                 sigma = min(100.0, sigma + 12.0)
-            # Smart Money Fusion — incrocio statistica-mercato (Distribuzione Sigma)
             if quota_max is not None and quota_max > 0:
                 quota_ideale_sigma = (
                     100.0 / base_sigma if base_sigma > 1.0 else 999.0
@@ -5331,7 +5367,6 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
                     rapporto_paura = quota_ideale_sigma / quota_max
                     bonus_insider = 12.0 + (rapporto_paura * 8.0)
                     sigma = min(100.0, sigma + bonus_insider)
-            # Taglio Netto Outsider — filtro probabilità (Distribuzione Sigma)
             if quota_max is not None:
                 if quota_max > 40.0:
                     sigma = min(sigma, 25.0)
@@ -5340,11 +5375,13 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
             sigma = max(0.0, min(100.0, sigma))
             densita = sigma / 100.0
             tilt = (
-                (statistics.mean(quote) - 1.60) / 18.40
-                if quote
-                else 0.0
+                tilt_mercato
+                if tilt_mercato > 0
+                else max(
+                    0.0,
+                    min(1.0, (statistics.mean(quote) - 1.60) / 18.40),
+                )
             )
-            tilt = max(0.0, min(1.0, tilt))
 
         fair_odds = _fair_odds_da_sigma(sigma)
         if quota_max is not None and fair_odds is not None:
