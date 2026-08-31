@@ -93,11 +93,36 @@ st.markdown("""
 
 st.markdown("""
     <style>
+    html, body, #root {
+        height: auto !important;
+        min-height: 100%;
+        max-height: none !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        position: static !important;
+    }
     .stApp {
         background: linear-gradient(180deg, #2A2D34 0%, #141518 100%) !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        position: relative !important;
+    }
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"],
+    section.main,
+    .main,
+    .block-container,
+    div[data-testid="stVerticalBlock"] {
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        position: relative !important;
     }
     [data-testid="stHeader"] {
         background-color: transparent !important;
+        position: sticky !important;
     }
     .stApp, p, span, h1, h2, h3, h4, h5, h6, label, li {
         color: #F3F4F6 !important;
@@ -3000,18 +3025,70 @@ def _linea_quota_decimale(testo: str) -> float | None:
 
 
 def _quote_decimali_riga_sicure(testo: str) -> list[float]:
-    """Decimali tipo 7.00 sulla riga; ignora Kg/fantino; soglia 1.60."""
-    if not testo or re.search(r"(?i)\bkg\b", testo):
+    """Cerca decimali 3.50 / 7.00 anche su riga mista (Kg incluso); soglia 1.60."""
+    if not testo:
         return []
     trovate: list[float] = []
-    for match in re.finditer(r"(?<![\d])\d+[.,]\d{2}(?![\d])", testo):
-        try:
-            valore = float(match.group(0).replace(",", "."))
-        except ValueError:
-            continue
-        if valore >= SOGLIA_QUOTA_VINCENTE_SIGMA:
+    patterni = (
+        r"(?<![\d])\d+\.\d{2}(?![\d])",
+        r"(?<![\d])\d+,\d{2}(?![\d])",
+        r"(?<![\d])\d+[.,]\d{1,2}(?![\d])",
+    )
+    visti: set[float] = set()
+    for pattern in patterni:
+        for match in re.finditer(pattern, testo):
+            try:
+                valore = float(match.group(0).replace(",", "."))
+            except ValueError:
+                continue
+            if valore < SOGLIA_QUOTA_VINCENTE_SIGMA or valore in visti:
+                continue
+            visti.add(valore)
             trovate.append(valore)
     return trovate
+
+
+def _scansiona_quote_e_storico_dopo_nome(
+    linee: list[str],
+    indice_nome: int,
+    limite: int,
+) -> tuple[list[float], str, float | None, str]:
+    """
+    Dopo il nome: scorre le 6 righe successive.
+    Quote = decimali \\d+.\\d{2}; storico = 1-2-1 / 1p 2p / X-X-1.
+    """
+    quote: list[float] = []
+    ultimi = ""
+    rating = None
+    eta = ""
+    inizio = indice_nome + 1
+    fine_scan = min(limite, inizio + 6)
+    for riga in linee[inizio:fine_scan]:
+        if not riga:
+            continue
+        if "YO" in riga.upper() and not eta:
+            eta = _eta_normalizzata(AGE_RE.search(riga))
+        if rating is None and _linea_etichetta_rating(riga):
+            rating = _rating_da_linea(riga)
+        if not ultimi:
+            if _linea_etichetta_ultimi(riga):
+                resto = riga.split(":", 1)[-1].strip() if ":" in riga else ""
+                if resto.lower().startswith("ultimi") or resto.lower() in {
+                    "forma",
+                    "forma storica",
+                    "",
+                }:
+                    resto = ""
+                if resto:
+                    ultimi = _normalizza_forma_storica(resto)
+            if not ultimi:
+                ultimi = _normalizza_forma_storica(riga)
+        for q in _quote_decimali_riga_sicure(riga):
+            if len(quote) >= MAX_QUOTE_MERCATO_UTILI:
+                break
+            if q not in quote:
+                quote.append(q)
+    return quote, ultimi, rating, eta
 
 
 def _linea_numero_partente(testo: str) -> int | None:
@@ -3141,60 +3218,30 @@ def _parse_partenti_ancora_silks(testo: str) -> list[dict[str, object]]:
 
             fine = len(pulite)
             if pos + 1 < len(indici_silks):
-                fine = max(idx_silks + 2, indici_silks[pos + 1] - 1)
+                fine = indici_silks[pos + 1]
+            limite_scan = min(fine, idx_silks + 2 + 6)
 
             eta = ""
-            corpo_da = idx_silks + 2
-            if corpo_da < fine and "YO" in pulite[corpo_da].upper():
-                eta = _eta_normalizzata(AGE_RE.search(pulite[corpo_da]))
-                corpo_da += 1
-
-            blocco = pulite[idx_silks - 1 : fine]
-            testo_blocco = "\n".join(blocco).lower()
-            ritirato = (
-                "non partente" in testo_blocco or "ritirat" in testo_blocco
-            )
-
             rating = None
             ultimi = ""
             quote: list[float] = []
-            if not ritirato:
-                for riga in pulite[corpo_da:fine]:
-                    basso = riga.lower()
-                    if "non partente" in basso or "ritirat" in basso:
-                        continue
-                    if "kg" in basso:
-                        continue
-                    if _linea_etichetta_rating(riga) and rating is None:
-                        rating = _rating_da_linea(riga)
-                        continue
-                    if _linea_etichetta_ultimi(riga) and not ultimi:
-                        resto = riga.split(":", 1)[-1].strip() if ":" in riga else ""
-                        if resto.lower().startswith("ultimi") or resto.lower() in {
-                            "forma",
-                            "forma storica",
-                            "",
-                        }:
-                            resto = ""
-                        ultimi = _normalizza_forma_storica(resto) if resto else ""
-                        continue
-                    if not ultimi:
-                        forma_riga = _normalizza_forma_storica(riga)
-                        if forma_riga and (
-                            " - " in forma_riga
-                            or (forma_riga.isdigit() and len(forma_riga) >= 3)
-                        ):
-                            ultimi = forma_riga
-                            continue
-                    q_riga = _quote_decimali_riga_sicure(riga)
-                    for q in q_riga:
-                        if len(quote) >= MAX_QUOTE_MERCATO_UTILI:
-                            break
-                        quote.append(q)
-                if not ultimi:
-                    ultimi = _raccogli_forma_verticale(pulite, corpo_da, fine)
-                if not ultimi:
-                    ultimi = _estrai_forma_storica_da_righe(blocco, 0)
+            q_scan, ultimi, rating, eta_scan = _scansiona_quote_e_storico_dopo_nome(
+                pulite, idx_silks + 1, limite_scan
+            )
+            quote = q_scan
+            if eta_scan:
+                eta = eta_scan
+            corpo_da = idx_silks + 2
+            if corpo_da < fine and "YO" in pulite[corpo_da].upper():
+                if not eta:
+                    eta = _eta_normalizzata(AGE_RE.search(pulite[corpo_da]))
+                corpo_da += 1
+            if not ultimi:
+                ultimi = _raccogli_forma_verticale(pulite, corpo_da, min(fine, corpo_da + 8))
+            if not ultimi:
+                ultimi = _estrai_forma_storica_da_righe(
+                    pulite[idx_silks - 1 : fine], 0
+                )
 
             lista.append(
                 {
@@ -3203,7 +3250,7 @@ def _parse_partenti_ancora_silks(testo: str) -> list[dict[str, object]]:
                     "ultimi_arrivi": ultimi or "",
                     "forma_storica": ultimi or "",
                     "quote_valide": quote,
-                    "blocco": "\n".join(blocco),
+                    "blocco": "\n".join(pulite[idx_silks - 1 : fine]),
                     "eta": eta,
                     "rating": rating,
                 }
@@ -3284,37 +3331,26 @@ def _parse_partenti_per_indici(testo: str) -> list[dict[str, object]]:
             break
         if not ultimi:
             ultimi = _estrai_forma_storica_da_righe(blocco_linee, 0)
-        quote: list[float] = []
-        for riga in blocco_linee:
-            if "kg" in riga.lower():
-                continue
-            q = _linea_quota_decimale(riga)
-            if q is None:
-                continue
-            if q >= SOGLIA_QUOTA_VINCENTE_SIGMA:
-                quote.append(q)
-            if len(quote) >= MAX_QUOTE_MERCATO_UTILI:
-                break
-        if not quote:
-            i = fine if fine > i else i + 1
-            continue
-        ritirato = any(
-            "non partente" in r.lower() or "ritirat" in r.lower()
-            for r in blocco_linee
+        q_scan, ultimi_scan, rating_scan, _eta_scan = _scansiona_quote_e_storico_dopo_nome(
+            linee, j, min(fine, j + 1 + 6)
         )
-        if not ritirato:
-            lista.append(
-                {
-                    "numero": numero,
-                    "nome": nome,
-                    "ultimi_arrivi": ultimi,
-                    "forma_storica": ultimi,
-                    "quote_valide": quote,
-                    "blocco": "\n".join(blocco_linee),
-                    "eta": eta,
-                    "rating": rating,
-                }
-            )
+        quote = q_scan
+        if ultimi_scan and not ultimi:
+            ultimi = ultimi_scan
+        if rating is None and rating_scan is not None:
+            rating = rating_scan
+        lista.append(
+            {
+                "numero": numero,
+                "nome": nome,
+                "ultimi_arrivi": ultimi,
+                "forma_storica": ultimi,
+                "quote_valide": quote,
+                "blocco": "\n".join(blocco_linee),
+                "eta": eta,
+                "rating": rating,
+            }
+        )
         i = fine if fine > i else i + 1
     return lista
 
