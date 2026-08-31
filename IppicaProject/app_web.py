@@ -3096,9 +3096,9 @@ def _inizia_blocco_cavallo(linee: list[str], indice: int) -> bool:
 
 def _parse_partenti_ancora_silks(testo: str) -> list[dict[str, object]]:
     """
-    Parser verticale: ancora 'silks'.
-    Riga precedente = N° partente, riga successiva = Nome, poi Età (nYO).
-    Quote e statistica nelle righe sotto; Non partente / debutto → campi None.
+    Parser verticale: ancora 'silks' (anche con spazi/maiuscole).
+    Riga precedente = N°, riga successiva = Nome. Il cavallo è sempre tenuto.
+    Quote < 1.60 scartate; Non partente / dati assenti → None, record conservato.
     """
     grezze = [ln.rstrip() for ln in str(testo or "").splitlines()]
     pulite: list[str] = [ln.strip() for ln in grezze if ln.strip()]
@@ -3106,91 +3106,98 @@ def _parse_partenti_ancora_silks(testo: str) -> list[dict[str, object]]:
         return []
 
     indici_silks = [
-        i for i, t in enumerate(pulite) if t.lower() in {"silks", "silk"}
+        i for i, t in enumerate(pulite) if "silks" in t.lower()
     ]
     lista: list[dict[str, object]] = []
 
     for pos, idx_silks in enumerate(indici_silks):
-        if idx_silks == 0:
-            continue
-        riga_num = pulite[idx_silks - 1]
-        if not riga_num.isdigit() or not (1 <= int(riga_num) <= 40):
-            continue
-        numero = int(riga_num)
-        if idx_silks + 1 >= len(pulite):
-            continue
-        nome = pulite[idx_silks + 1]
-        if nome.lower() in {"silks", "silk"}:
-            continue
-        if not any(c.isalpha() for c in nome):
-            continue
-
-        fine = len(pulite)
-        if pos + 1 < len(indici_silks):
-            fine = max(idx_silks + 2, indici_silks[pos + 1] - 1)
-
-        eta = ""
-        corpo_da = idx_silks + 2
-        if corpo_da < fine and "YO" in pulite[corpo_da].upper():
-            eta = _eta_normalizzata(AGE_RE.search(pulite[corpo_da]))
-            corpo_da += 1
-
-        blocco = pulite[idx_silks - 1 : fine]
-        testo_blocco = "\n".join(blocco).lower()
-        if "non partente" in testo_blocco or "ritirat" in testo_blocco:
-            continue
-
-        rating = None
-        ultimi = ""
-        quote: list[float] = []
-        for riga in pulite[corpo_da:fine]:
-            basso = riga.lower()
-            if "kg" in basso:
+        try:
+            if idx_silks == 0:
                 continue
-            if _linea_etichetta_rating(riga) and rating is None:
-                rating = _rating_da_linea(riga)
+            riga_num = pulite[idx_silks - 1]
+            numero = None
+            if riga_num.isdigit() and 1 <= int(riga_num) <= 40:
+                numero = int(riga_num)
+            if idx_silks + 1 >= len(pulite):
                 continue
-            if _linea_etichetta_ultimi(riga) and not ultimi:
-                resto = riga.split(":", 1)[-1].strip() if ":" in riga else ""
-                if resto.lower().startswith("ultimi") or resto.lower() in {
-                    "forma",
-                    "forma storica",
-                    "",
-                }:
-                    resto = ""
-                ultimi = _normalizza_forma_storica(resto) if resto else ""
+            nome = pulite[idx_silks + 1]
+            if "silks" in nome.lower():
                 continue
-            if not ultimi:
-                forma_riga = _normalizza_forma_storica(riga)
-                if forma_riga and (
-                    " - " in forma_riga or (forma_riga.isdigit() and len(forma_riga) >= 3)
-                ):
-                    ultimi = forma_riga
-                    continue
-            q = _linea_quota_decimale(riga)
-            if q is not None and q >= SOGLIA_QUOTA_VINCENTE_SIGMA:
-                if len(quote) < MAX_QUOTE_MERCATO_UTILI:
-                    quote.append(q)
+            if not any(c.isalpha() for c in nome):
+                continue
 
-        if not ultimi:
-            ultimi = _raccogli_forma_verticale(pulite, corpo_da, fine)
-        if not ultimi:
-            ultimi = _estrai_forma_storica_da_righe(blocco, 0)
-        if not quote:
+            fine = len(pulite)
+            if pos + 1 < len(indici_silks):
+                fine = max(idx_silks + 2, indici_silks[pos + 1] - 1)
+
+            eta = ""
+            corpo_da = idx_silks + 2
+            if corpo_da < fine and "YO" in pulite[corpo_da].upper():
+                eta = _eta_normalizzata(AGE_RE.search(pulite[corpo_da]))
+                corpo_da += 1
+
+            blocco = pulite[idx_silks - 1 : fine]
+            testo_blocco = "\n".join(blocco).lower()
+            ritirato = (
+                "non partente" in testo_blocco or "ritirat" in testo_blocco
+            )
+
+            rating = None
+            ultimi = ""
+            quote: list[float] = []
+            if not ritirato:
+                for riga in pulite[corpo_da:fine]:
+                    basso = riga.lower()
+                    if "non partente" in basso or "ritirat" in basso:
+                        continue
+                    if "kg" in basso:
+                        continue
+                    if _linea_etichetta_rating(riga) and rating is None:
+                        rating = _rating_da_linea(riga)
+                        continue
+                    if _linea_etichetta_ultimi(riga) and not ultimi:
+                        resto = riga.split(":", 1)[-1].strip() if ":" in riga else ""
+                        if resto.lower().startswith("ultimi") or resto.lower() in {
+                            "forma",
+                            "forma storica",
+                            "",
+                        }:
+                            resto = ""
+                        ultimi = _normalizza_forma_storica(resto) if resto else ""
+                        continue
+                    if not ultimi:
+                        forma_riga = _normalizza_forma_storica(riga)
+                        if forma_riga and (
+                            " - " in forma_riga
+                            or (forma_riga.isdigit() and len(forma_riga) >= 3)
+                        ):
+                            ultimi = forma_riga
+                            continue
+                    q = _linea_quota_decimale(riga)
+                    if q is not None and q >= SOGLIA_QUOTA_VINCENTE_SIGMA:
+                        if len(quote) < MAX_QUOTE_MERCATO_UTILI:
+                            quote.append(q)
+                if not ultimi:
+                    ultimi = _raccogli_forma_verticale(pulite, corpo_da, fine)
+                if not ultimi:
+                    ultimi = _estrai_forma_storica_da_righe(blocco, 0)
+
+            lista.append(
+                {
+                    "numero": numero,
+                    "nome": nome,
+                    "ultimi_arrivi": ultimi or "",
+                    "forma_storica": ultimi or "",
+                    "quote_valide": quote,
+                    "blocco": "\n".join(blocco),
+                    "eta": eta,
+                    "rating": rating,
+                }
+            )
+        except Exception as exc:
+            riga_err = pulite[idx_silks] if idx_silks < len(pulite) else ""
+            _segnala_errore_parsing("Nome Cavallo", idx_silks + 1, riga_err, exc)
             continue
-
-        lista.append(
-            {
-                "numero": numero,
-                "nome": nome,
-                "ultimi_arrivi": ultimi or "",
-                "forma_storica": ultimi or "",
-                "quote_valide": quote,
-                "blocco": "\n".join(blocco),
-                "eta": eta,
-                "rating": rating,
-            }
-        )
     return lista
 
 
@@ -3709,21 +3716,23 @@ def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
     df_normalizzato = _normalizza_dataframe_partenti(df_blindato)
     righe_valide: list[pd.Series] = []
     for _indice, riga in df_normalizzato.iterrows():
+        nome_riga = str(riga.get("Nome") or "").strip()
+        if not nome_riga or nome_riga.lower() in {"none", "nan", "n/d"}:
+            continue
         step = "Quote Valide"
         try:
             quote = _parse_quote_valide_cella(riga.get("Quote Valide"))
-            if not quote:
-                continue
             riga_filtrata = riga.copy()
-            riga_filtrata["Quote Valide"] = " | ".join(f"{q:.2f}" for q in quote)
+            if quote:
+                riga_filtrata["Quote Valide"] = " | ".join(f"{q:.2f}" for q in quote)
+            else:
+                riga_filtrata["Quote Valide"] = "N/D"
             righe_valide.append(riga_filtrata)
         except Exception as exc:
-            _segnala_errore_parsing(
-                step,
-                None,
-                str(riga.get("Nome") or ""),
-                exc,
-            )
+            riga_ok = riga.copy()
+            riga_ok["Quote Valide"] = "N/D"
+            righe_valide.append(riga_ok)
+            _segnala_errore_parsing(step, None, nome_riga, exc)
             continue
 
     if not righe_valide:
