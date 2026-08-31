@@ -355,7 +355,7 @@ def _parse_singolo_blocco_partente(
 
     fantino = _estrai_fantino_dopo_eta(linee, indice_eta)
     if not fantino:
-        return None
+        fantino = ""
 
     decimali = _estrai_decimali_coda_blocco(linee)
     if not decimali:
@@ -407,9 +407,13 @@ def estrai_dati(testo_incollato):
     dati = []
     for riga in testo_incollato.splitlines():
         riga = riga.strip()
-        if not riga: continue
+        if not riga:
+            continue
+        if not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", riga):
+            continue
         parti = riga.split()
-        if len(parti) < 2: continue
+        if len(parti) < 2:
+            continue
         
         numero = parti[0]
         # Tenta di prendere la quota alla fine. Se fallisce, significa che non c'è.
