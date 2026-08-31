@@ -3087,7 +3087,111 @@ def _inizia_blocco_cavallo(linee: list[str], indice: int) -> bool:
     nxt = _indice_prossima_non_vuota(linee, indice + 1)
     if nxt >= len(linee):
         return False
-    return _linea_gabbia(linee[nxt]) or _linea_sembra_nome_cavallo(linee[nxt])
+    return (
+        _linea_gabbia(linee[nxt])
+        or linee[nxt].strip().lower() in {"silks", "silk"}
+        or _linea_sembra_nome_cavallo(linee[nxt])
+    )
+
+
+def _parse_partenti_ancora_silks(testo: str) -> list[dict[str, object]]:
+    """
+    Parser verticale: ancora 'silks'.
+    Riga precedente = N° partente, riga successiva = Nome, poi Età (nYO).
+    Quote e statistica nelle righe sotto; Non partente / debutto → campi None.
+    """
+    grezze = [ln.rstrip() for ln in str(testo or "").splitlines()]
+    pulite: list[str] = [ln.strip() for ln in grezze if ln.strip()]
+    if not pulite:
+        return []
+
+    indici_silks = [
+        i for i, t in enumerate(pulite) if t.lower() in {"silks", "silk"}
+    ]
+    lista: list[dict[str, object]] = []
+
+    for pos, idx_silks in enumerate(indici_silks):
+        if idx_silks == 0:
+            continue
+        riga_num = pulite[idx_silks - 1]
+        if not riga_num.isdigit() or not (1 <= int(riga_num) <= 40):
+            continue
+        numero = int(riga_num)
+        if idx_silks + 1 >= len(pulite):
+            continue
+        nome = pulite[idx_silks + 1]
+        if nome.lower() in {"silks", "silk"}:
+            continue
+        if not any(c.isalpha() for c in nome):
+            continue
+
+        fine = len(pulite)
+        if pos + 1 < len(indici_silks):
+            fine = max(idx_silks + 2, indici_silks[pos + 1] - 1)
+
+        eta = ""
+        corpo_da = idx_silks + 2
+        if corpo_da < fine and "YO" in pulite[corpo_da].upper():
+            eta = _eta_normalizzata(AGE_RE.search(pulite[corpo_da]))
+            corpo_da += 1
+
+        blocco = pulite[idx_silks - 1 : fine]
+        testo_blocco = "\n".join(blocco).lower()
+        if "non partente" in testo_blocco or "ritirat" in testo_blocco:
+            continue
+
+        rating = None
+        ultimi = ""
+        quote: list[float] = []
+        for riga in pulite[corpo_da:fine]:
+            basso = riga.lower()
+            if "kg" in basso:
+                continue
+            if _linea_etichetta_rating(riga) and rating is None:
+                rating = _rating_da_linea(riga)
+                continue
+            if _linea_etichetta_ultimi(riga) and not ultimi:
+                resto = riga.split(":", 1)[-1].strip() if ":" in riga else ""
+                if resto.lower().startswith("ultimi") or resto.lower() in {
+                    "forma",
+                    "forma storica",
+                    "",
+                }:
+                    resto = ""
+                ultimi = _normalizza_forma_storica(resto) if resto else ""
+                continue
+            if not ultimi:
+                forma_riga = _normalizza_forma_storica(riga)
+                if forma_riga and (
+                    " - " in forma_riga or (forma_riga.isdigit() and len(forma_riga) >= 3)
+                ):
+                    ultimi = forma_riga
+                    continue
+            q = _linea_quota_decimale(riga)
+            if q is not None and q >= SOGLIA_QUOTA_VINCENTE_SIGMA:
+                if len(quote) < MAX_QUOTE_MERCATO_UTILI:
+                    quote.append(q)
+
+        if not ultimi:
+            ultimi = _raccogli_forma_verticale(pulite, corpo_da, fine)
+        if not ultimi:
+            ultimi = _estrai_forma_storica_da_righe(blocco, 0)
+        if not quote:
+            continue
+
+        lista.append(
+            {
+                "numero": numero,
+                "nome": nome,
+                "ultimi_arrivi": ultimi or "",
+                "forma_storica": ultimi or "",
+                "quote_valide": quote,
+                "blocco": "\n".join(blocco),
+                "eta": eta,
+                "rating": rating,
+            }
+        )
+    return lista
 
 
 def _parse_partenti_per_indici(testo: str) -> list[dict[str, object]]:
@@ -3209,6 +3313,7 @@ def _estrai_partenti_verticali(testo: str) -> pd.DataFrame:
             if i + 1 >= len(lines) or not (
                 CODICE_GABBIA_RIGA_RE.fullmatch(gate) is not None
                 or gate.upper().startswith("G")
+                or gate.lower() in {"silks", "silk"}
                 or gate.isdigit()
             ):
                 i += 1
@@ -3435,6 +3540,7 @@ def _dataframe_partenti_orizzontale(testo: str) -> pd.DataFrame:
 
     records: list[dict[str, object]] = []
     for parser in (
+        _parse_partenti_ancora_silks,
         _parse_partenti_per_indici,
         _parse_partenti_index_scan_yo,
         _parse_partenti_macchina_stati,
@@ -3548,10 +3654,11 @@ def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
 
     df_blindato = _dataframe_dati_gara_vuoto()
     try:
-        records_idx = _parse_partenti_per_indici(testo_originale)
-        if records_idx:
-            righe_idx = [_record_da_macchina_stati(r) for r in records_idx]
-            df_blindato = pd.DataFrame(righe_idx)
+        records_silks = _parse_partenti_ancora_silks(testo_originale)
+        if records_silks:
+            df_blindato = pd.DataFrame(
+                [_record_da_macchina_stati(r) for r in records_silks]
+            )
     except Exception as exc:
         prima = testo_originale.splitlines()[0] if testo_originale else ""
         _segnala_errore_parsing("Nome Cavallo", 1, prima, exc)
