@@ -162,8 +162,8 @@ RATING_RE = re.compile(
     r"(?i)\b(?:rating|rtg|ratting)\b[ \t]*:?[ \t]*"
     r"(?P<rating>\d{1,3}(?:[ \t]*[.,][ \t]*\d+)?)"
 )
-# Token forma: posizione (1–12), eventuale 'p', lettere (X, FE, PU, NP…).
-_FORMA_TOKEN = r"(?:\d{1,2}[pP]?|[A-Za-z]{1,6})"
+# Token forma: piazzamenti, non nomi fantino (LOUISE/DAY) né Kg.
+_FORMA_TOKEN = r"(?:\d{1,2}[pP]?|FE|NP|PU|UR|SU|BD|RR|CO|RO|[XxFPWD])"
 ULTIMI_ARRIVI_RE = re.compile(
     r"(?i)(?:ultimi[ \t]+arrivi|ultime[ \t]+uscite|forma(?:[ \t]+storica)?)[ \t]*:?[ \t]*"
     r"(?P<ultimi>.+)$"
@@ -2018,6 +2018,10 @@ def _normalizza_forma_storica(valore: object) -> str:
     testo = " ".join(str(valore or "").split())
     if not testo or testo.lower() in {"nan", "none", "<na>", "n/d"}:
         return ""
+    if re.search(r"(?i)\bkg\b", testo):
+        return ""
+    if re.search(r"(?i)\bnot\s+notified\b", testo):
+        return ""
     testo = testo.replace("–", "-").replace("—", "-").replace("/", "-")
 
     match_p = FORMA_SPAZI_P_RE.search(testo)
@@ -2051,9 +2055,11 @@ def _normalizza_forma_storica(valore: object) -> str:
         return solo.upper()
 
     if not QUOTA_DECIMALE_RE.search(solo):
-        token_spazio = re.findall(r"(?i)\d{1,2}[pP]?|[A-Za-z]{1,6}", solo)
+        token_spazio = re.findall(
+            r"(?i)\d{1,2}[pP]?|FE|NP|PU|UR|SU|BD|RR|CO|RO|[XxFPWD]", solo
+        )
         ricostruito = " ".join(token_spazio)
-        if token_spazio and ricostruito == solo.replace("-", " ").strip():
+        if token_spazio and ricostruito.lower() == solo.replace("-", " ").strip().lower():
             pezzi = [_token_forma_a_pezzo(t) for t in token_spazio if t.strip()]
             pezzi = [p for p in pezzi if p]
             if len(pezzi) >= 2 and any(p.isdigit() for p in pezzi):
@@ -2989,16 +2995,23 @@ def _parse_partenti_da_blocchi(testo: str) -> list[dict[str, object]]:
 
 
 def _linea_quota_decimale(testo: str) -> float | None:
-    t = testo.strip().replace(",", ".")
-    if "." not in t:
-        return None
-    try:
-        valore = float(t)
-    except ValueError:
-        return None
-    if 1.01 <= valore <= 500.0:
-        return valore
-    return None
+    trovate = _quote_decimali_riga_sicure(testo)
+    return trovate[0] if trovate else None
+
+
+def _quote_decimali_riga_sicure(testo: str) -> list[float]:
+    """Decimali tipo 7.00 sulla riga; ignora Kg/fantino; soglia 1.60."""
+    if not testo or re.search(r"(?i)\bkg\b", testo):
+        return []
+    trovate: list[float] = []
+    for match in re.finditer(r"(?<![\d])\d+[.,]\d{2}(?![\d])", testo):
+        try:
+            valore = float(match.group(0).replace(",", "."))
+        except ValueError:
+            continue
+        if valore >= SOGLIA_QUOTA_VINCENTE_SIGMA:
+            trovate.append(valore)
+    return trovate
 
 
 def _linea_numero_partente(testo: str) -> int | None:
@@ -3173,10 +3186,11 @@ def _parse_partenti_ancora_silks(testo: str) -> list[dict[str, object]]:
                         ):
                             ultimi = forma_riga
                             continue
-                    q = _linea_quota_decimale(riga)
-                    if q is not None and q >= SOGLIA_QUOTA_VINCENTE_SIGMA:
-                        if len(quote) < MAX_QUOTE_MERCATO_UTILI:
-                            quote.append(q)
+                    q_riga = _quote_decimali_riga_sicure(riga)
+                    for q in q_riga:
+                        if len(quote) >= MAX_QUOTE_MERCATO_UTILI:
+                            break
+                        quote.append(q)
                 if not ultimi:
                     ultimi = _raccogli_forma_verticale(pulite, corpo_da, fine)
                 if not ultimi:
@@ -6583,18 +6597,33 @@ def _render_inserimento_dati_gara() -> None:
 
 def _render_storico_gare_testo() -> None:
     with st.expander("📄 Visualizza gare", expanded=True):
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stElementContainer"].st-key-svuota_database_completo button {
+                background: linear-gradient(180deg, #b91c1c 0%, #7f1d1d 100%) !important;
+                color: #ffffff !important;
+                font-weight: 800 !important;
+                border: 2px solid #ef4444 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         if st.button(
-            "🗑️ Elimina storico",
-            type="secondary",
+            "🗑️ Svuota Database",
+            type="primary",
             use_container_width=True,
-            key="elimina_storico_gare_testo",
+            key="svuota_database_completo",
         ):
             try:
-                _svuota_storico_gare_testo()
-            except OSError as exc:
+                _svuota_database_completo()
+            except (OSError, sqlite3.Error) as exc:
                 st.error(f"Cancellazione non eseguita: {exc}")
             else:
-                st.success("Storico gare eliminato.")
+                st.session_state.messaggio_flash = (
+                    "Database e storico gare svuotati."
+                )
                 st.rerun()
 
         if not os.path.exists(STORICO_GARE_PATH):
@@ -7058,6 +7087,28 @@ def _html_riga_registro_logbook(
 ) -> str:
     """Legacy compat: estratto HTML senza widget esito."""
     return _html_estratto_pronostico_logbook(gara)
+
+
+def _svuota_database_completo() -> None:
+    """Cancella storico SQLite, file locale e stato sessione (interfaccia vuota)."""
+    with sqlite3.connect(DB_PATH) as conn:
+        for tabella in (
+            "ordini_arrivo_gare",
+            "gare_sigma_archivio",
+            "palinsesto_sigma",
+            "ultime_corse",
+            "cavalli",
+        ):
+            try:
+                conn.execute(f"DELETE FROM {tabella}")
+            except sqlite3.OperationalError:
+                continue
+        conn.commit()
+    try:
+        _svuota_storico_gare_testo()
+    except OSError:
+        pass
+    _reset_archivio_corse_manuale()
 
 
 def _svuota_archivio_corse() -> None:
