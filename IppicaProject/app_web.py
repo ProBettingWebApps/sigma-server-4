@@ -1283,7 +1283,10 @@ def _intestazione_gara_vuota() -> dict[str, str]:
 
 def _riga_tabella_orari_palinsesto(riga: str) -> bool:
     """Ignora righe palinsesto tipo «1 20:58», «2 21:25»."""
-    return RIGA_TABella_ORARI_PALINSESTO_RE.match(riga.strip()) is not None
+    try:
+        return RIGA_TABELLA_ORARI_PALINSESTO_RE.match(riga.strip()) is not None
+    except (TypeError, re.error, AttributeError):
+        return False
 
 
 def _indice_prima_data_gara_linee(linee: list[str]) -> int | None:
