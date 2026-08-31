@@ -97,15 +97,18 @@ RATING_PARTENTE_RE = re.compile(
 ULTIMI_ARRIVI_PARTENTE_RE = re.compile(
     r"(?i)(?:ultimi\s+arrivi|ultime\s+uscite|forma(?:\s+storica)?)\s*:?\s*(?P<ultimi>.*)$"
 )
-_FORMA_TOKEN_PART = r"(?:\d{1,2}[pP]?|[A-Z]{1,6})"
+_FORMA_TOKEN_PART = r"(?:\d{1,2}[pP]?|FE|NP|PU|UR|SU|BD|RR|CO|RO|[XxFPWD])"
 FORMA_PARTENTE_RE = re.compile(
     rf"(?i)^(?:{_FORMA_TOKEN_PART})"
     rf"(?:\s*[-–—/]\s*{_FORMA_TOKEN_PART}|\s+{_FORMA_TOKEN_PART})*$"
 )
-FORMA_TOKEN_PARTENTE_RE = re.compile(r"(?i)^(?:\d{1,2}[pP]?|[A-Z]{1,6})$")
+FORMA_TOKEN_PARTENTE_RE = re.compile(
+    r"(?i)^(?:\d{1,2}[pP]?|FE|NP|PU|UR|SU|BD|RR|CO|RO|[XxFPWD])$"
+)
 FORMA_COMPATTA_PARTENTE_RE = re.compile(r"^\d{3,6}$")
 SEPARATORE_FORMA_PARTENTE_RE = re.compile(r"^[-–—]+$")
-DECIMAL_QUOTE_RE = re.compile(r"^\s*(?P<q>\d+[.,]\d{1,2})\s*$")
+DECIMAL_QUOTE_RE = re.compile(r"^\s*(?P<q>\d+[.,]\d{2})\s*$")
+DECIMAL_QUOTE_INLINE_RE = re.compile(r"(?<![\d])\d+[.,]\d{2}(?![\d])")
 RIGA_ORARI_PALINSESTO_RE = re.compile(r"^\s*\d{1,2}\s+\d{1,2}:\d{2}\s*$")
 
 
@@ -213,6 +216,10 @@ def _normalizza_forma_partente(testo: str) -> str:
     grezzo = " ".join(str(testo or "").split())
     if not grezzo:
         return ""
+    if re.search(r"(?i)\bkg\b", grezzo):
+        return ""
+    if re.search(r"(?i)\bnot\s+notified\b", grezzo):
+        return ""
     grezzo = grezzo.replace("–", "-").replace("—", "-").replace("/", "-")
     if FORMA_COMPATTA_PARTENTE_RE.fullmatch(grezzo):
         return grezzo
@@ -315,20 +322,15 @@ def _estrai_decimali_coda_blocco(linee: list[str]) -> list[float]:
         if NUMERO_PARTENTE_ISOLATO_RE.fullmatch(testo):
             break
         if re.search(r"(?i)\bkg\b", testo):
-            break
-        if re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", testo):
-            if raccolti:
-                break
             continue
         riga_quote: list[float] = []
-        if DECIMAL_QUOTE_RE.fullmatch(testo):
-            valore = DECIMAL_QUOTE_RE.fullmatch(testo)
-            assert valore is not None
-            riga_quote.append(float(valore.group("q").replace(",", ".")))
-        else:
-            for pezzo in re.findall(r"\b\d+[.,]\d{1,2}\b", testo):
-                riga_quote.append(float(pezzo.replace(",", ".")))
+        for pezzo in DECIMAL_QUOTE_INLINE_RE.findall(testo):
+            riga_quote.append(float(pezzo.replace(",", ".")))
         if not riga_quote:
+            if re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", testo):
+                if raccolti:
+                    break
+                continue
             if raccolti:
                 break
             continue
