@@ -158,19 +158,28 @@ NOME_CAVALLO_RIGA_RE = re.compile(
     r"^[ \t]*(?P<nome>[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9'\.\- /]{1,80})[ \t]*$"
 )
 AGE_RE = re.compile(r"(?i)\b(?P<eta>\d{1,2}[ \t]*YO)\b")
-RATING_RE = re.compile(r"(?i)Rating[ \t]*:[ \t]*(?P<rating>\d+(?:[ \t]*[.,][ \t]*\d+)?)")
+RATING_RE = re.compile(
+    r"(?i)\b(?:rating|rtg|ratting)\b[ \t]*:?[ \t]*"
+    r"(?P<rating>\d{1,3}(?:[ \t]*[.,][ \t]*\d+)?)"
+)
+# Token forma: posizione (1–12), eventuale 'p', lettere (X, FE, PU, NP…).
+_FORMA_TOKEN = r"(?:\d{1,2}[pP]?|[A-Za-z]{1,6})"
 ULTIMI_ARRIVI_RE = re.compile(
-    r"(?i)Ultimi[ \t]+arrivi[ \t]*:?[ \t]*(?P<ultimi>"
-    r"(?:\d{1,2}|[A-Za-z]{1,6})(?:[ \t]*-[ \t]*(?:\d{1,2}|[A-Za-z]{1,6}))+"
-    r"|\d+"
-    r"|[A-Za-z]{1,6})"
+    r"(?i)(?:ultimi[ \t]+arrivi|ultime[ \t]+uscite|forma(?:[ \t]+storica)?)[ \t]*:?[ \t]*"
+    r"(?P<ultimi>.+)$"
 )
 FORMA_STORICA_SEQUENZA_RE = re.compile(
-    r"(?i)\b(?P<form>(?:\d{1,2}|[A-Za-z]{1,6})"
-    r"(?:[ \t]*-[ \t]*(?:\d{1,2}|[A-Za-z]{1,6}))+)\b"
+    rf"(?i)(?P<form>{_FORMA_TOKEN}"
+    rf"(?:[ \t]*[-–—/][ \t]*{_FORMA_TOKEN}){{1,12}})"
 )
+FORMA_SPAZI_P_RE = re.compile(
+    rf"(?i)(?P<formp>(?:\d{{1,2}}p)(?:[ \t]+(?:\d{{1,2}}p)){{1,11}})"
+)
+FORMA_COMPATTA_RE = re.compile(r"^(?P<compact>\d{3,6})$")
 QUOTA_DECIMALE_RE = re.compile(r"(?<![\d.,])\d+[ \t]*[.,][ \t]*\d{1,2}(?![\d])")
-ULTIMI_ARRIVI_ETICHETTA_RE = re.compile(r"(?i)ultimi[ \t]+arrivi")
+ULTIMI_ARRIVI_ETICHETTA_RE = re.compile(
+    r"(?i)(?:ultimi[ \t]+arrivi|ultime[ \t]+uscite|\bforma(?:[ \t]+storica)?\b)"
+)
 DICITURA_RITIRO_PARTENTE_RE = re.compile(
     r"(?i)(?:\bnon[ \t]+partente\b|\britirat[oa]\b)"
 )
@@ -1918,24 +1927,63 @@ def _estrai_ultimi_arrivi_e_linee_quote(blocco: str) -> tuple[str, list[str]]:
     return "", []
 
 
-def _normalizza_forma_storica(valore: object) -> str:
-    """Normalizza sequenze reali tipo «9 - 1 - 2 - FE - 5» (nessun dato inventato)."""
-    testo = " ".join(str(valore or "").split())
+def _token_forma_a_pezzo(token: str) -> str:
+    testo = token.strip()
     if not testo:
         return ""
-    testo = re.sub(r"\s*-\s*", " - ", testo)
+    if re.fullmatch(r"\d{1,2}[pP]", testo):
+        return testo[:-1]
+    return testo.upper() if not testo.isdigit() else testo
+
+
+def _normalizza_forma_storica(valore: object) -> str:
+    """
+    Normalizza sequenze reali: «1-2-1», «1p 2p 3p», «X-X-1», «1111».
+    Nessun dato inventato: se il testo non è forma, restituisce stringa vuota.
+    """
+    testo = " ".join(str(valore or "").split())
+    if not testo or testo.lower() in {"nan", "none", "<na>", "n/d"}:
+        return ""
+    testo = testo.replace("–", "-").replace("—", "-").replace("/", "-")
+
+    match_p = FORMA_SPAZI_P_RE.search(testo)
+    if match_p is not None:
+        pezzi = [
+            _token_forma_a_pezzo(p)
+            for p in match_p.group("formp").split()
+            if p.strip()
+        ]
+        pezzi = [p for p in pezzi if p]
+        if len(pezzi) >= 2:
+            return " - ".join(pezzi)
+
     match = FORMA_STORICA_SEQUENZA_RE.search(testo)
     if match is not None:
         pezzi = [
-            p.strip().upper() if not p.strip().isdigit() else p.strip()
+            _token_forma_a_pezzo(p)
             for p in re.split(r"\s*-\s*", match.group("form"))
             if p.strip()
         ]
-        return " - ".join(pezzi)
-    if testo.isdigit():
-        return testo
-    if ULTIMI_ARRIVO_LETTERALE_RE.fullmatch(testo):
-        return testo.upper()
+        pezzi = [p for p in pezzi if p]
+        if len(pezzi) >= 2:
+            return " - ".join(pezzi)
+
+    solo = testo.strip()
+    if FORMA_COMPATTA_RE.fullmatch(solo):
+        return solo
+    if solo.isdigit() and 3 <= len(solo) <= 6:
+        return solo
+    if re.fullmatch(r"(?i)(?:FE|NP|PU|UR|SU|BD|RR|CO|RO|X)", solo):
+        return solo.upper()
+
+    if not QUOTA_DECIMALE_RE.search(solo):
+        token_spazio = re.findall(r"(?i)\d{1,2}[pP]?|[A-Za-z]{1,6}", solo)
+        ricostruito = " ".join(token_spazio)
+        if token_spazio and ricostruito == solo.replace("-", " ").strip():
+            pezzi = [_token_forma_a_pezzo(t) for t in token_spazio if t.strip()]
+            pezzi = [p for p in pezzi if p]
+            if len(pezzi) >= 2 and any(p.isdigit() for p in pezzi):
+                return " - ".join(pezzi)
     return ""
 
 
@@ -1945,6 +1993,10 @@ def _calcola_quanta_da_arrivi(forma_storica: object) -> float | None:
     Punti: 1→10, 2→7, 3→5, 4→3, 5→1; oltre il 5 o lettere (FE, NP, …) → 0.
     """
     testo = _normalizza_forma_storica(forma_storica)
+    if not testo:
+        testo = _normalizza_forma_storica(
+            " ".join(str(forma_storica or "").replace(",", " ").split())
+        )
     if not testo:
         return None
     if " - " in testo or "-" in testo:
@@ -1970,7 +2022,7 @@ def _estrai_forma_storica_da_righe(
     inizio: int,
     fine: int | None = None,
 ) -> str:
-    """Cerca «Ultimi arrivi» / sequenza a trattini nelle righe del blocco partente."""
+    """Cerca «Ultimi arrivi» / sequenza ibrida nelle righe del blocco partente."""
     limite = len(lines) if fine is None else min(fine, len(lines))
     start = max(0, inizio)
     for indice in range(start, limite):
@@ -1981,15 +2033,23 @@ def _estrai_forma_storica_da_righe(
                 forma = _normalizza_forma_storica(inline.group("ultimi"))
                 if forma:
                     return forma
-            for succ in range(indice + 1, min(indice + 4, limite)):
-                forma = _normalizza_forma_storica(lines[succ])
-                if forma and (" - " in forma or len(forma) >= 1):
-                    if FORMA_STORICA_SEQUENZA_RE.search(forma) or forma.isdigit():
-                        return forma
-                    if ULTIMI_ARRIVO_LETTERALE_RE.fullmatch(forma):
-                        return forma
+            for succ in range(indice + 1, min(indice + 8, limite)):
+                cand = lines[succ].strip()
+                if not cand:
+                    continue
+                if QUOTA_DECIMALE_RE.fullmatch(cand):
+                    break
+                forma = _normalizza_forma_storica(cand)
+                if forma:
+                    return forma
         forma_riga = _normalizza_forma_storica(riga)
-        if forma_riga and FORMA_STORICA_SEQUENZA_RE.search(forma_riga):
+        if not forma_riga:
+            continue
+        if FORMA_COMPATTA_RE.fullmatch(riga.strip()) or FORMA_SPAZI_P_RE.search(riga):
+            return forma_riga
+        if " - " in forma_riga or "-" in forma_riga:
+            return forma_riga
+        if forma_riga.isdigit() and len(forma_riga) >= 3:
             return forma_riga
     return ""
 
@@ -2157,7 +2217,7 @@ def _statistiche_mercato_da_dataframe(df: pd.DataFrame) -> dict[str, object]:
 
 RIGA_SOLO_NUMERO_PARTENTE_RE = re.compile(r"^[ \t]*(\d{1,2})[ \t]*$")
 RIGA_ULTIMI_ARRIVI_ESATTA_RE = re.compile(
-    r"(?i)^[ \t]*Ultimi[ \t]+arrivi[ \t]*:?[ \t]*$"
+    r"(?i)^[ \t]*(?:Ultimi[ \t]+arrivi|Ultime[ \t]+uscite|Forma(?:[ \t]+storica)?)[ \t]*:?[ \t]*$"
 )
 RIGA_ANCORA_SESSO_ETA_RE = re.compile(
     r"[|¦]?[ \t]*(Femmina|Maschio|Castrone)[ \t]*[|¦][ \t]*\d{1,2}[ \t]*YO",
@@ -3026,10 +3086,30 @@ def _record_da_macchina_stati(record: dict[str, object]) -> dict[str, object]:
     if not isinstance(quote_valide, list):
         quote_valide = []
     rating = record.get("rating")
-    forma_raw = record.get("forma_storica") or record.get("ultimi_arrivi") or ""
+    try:
+        if rating is None or (isinstance(rating, float) and math.isnan(rating)):
+            rating = None
+        elif pd.isna(rating):
+            rating = None
+        else:
+            rating = float(str(rating).replace(",", ".").replace(" ", ""))
+    except (TypeError, ValueError):
+        rating = None
+    blocco = str(record.get("blocco") or "")
+    if rating is None and blocco:
+        rating = _estrai_rating_blocco(blocco)
+    forma_raw = (
+        record.get("forma_storica")
+        or record.get("ultimi_arrivi")
+        or record.get("Ultimi Arrivi")
+        or ""
+    )
     forma_storica = _normalizza_forma_storica(forma_raw)
     if not forma_storica:
         forma_storica = _normalizza_testo_ultimi_arrivi(str(forma_raw or ""))
+        forma_storica = _normalizza_forma_storica(forma_storica) or forma_storica
+    if (not forma_storica or forma_storica.lower() in {"nan", "none"}) and blocco:
+        forma_storica = _estrai_forma_storica_da_righe(blocco.splitlines(), 0)
     return {
         "N°": record.get("numero"),
         "Nome": f"{record.get('numero')} - {record.get('nome')}",
@@ -3119,6 +3199,10 @@ def _inietta_moduli_da_forma_storica(df: pd.DataFrame) -> pd.DataFrame:
         ultimi_vals.append(ultimi)
 
         score = _calcola_quanta_da_arrivi(forma) if forma else None
+        if score is None:
+            score = _punteggio_ultimi_arrivi(ultimi) if ultimi else None
+        if score is None:
+            score = _punteggio_ultimi_arrivi(forma) if forma else None
         quanta_raw = riga.get("Quanta")
         regression_raw = riga.get("Regression")
         quanta_ok = False
@@ -4467,14 +4551,15 @@ def _parse_quote_valide_cella(valore: object) -> list[float]:
 def _punteggio_ultimi_arrivi(valore: object) -> float | None:
     """Quanta: sequenze Forma_Storica, cifre compatte o codici letterali reali."""
     testo = str(valore or "").strip()
-    if not testo:
+    if not testo or testo.lower() in {"nan", "none", "<na>", "n/d"}:
         return None
+    score = _calcola_quanta_da_arrivi(testo)
+    if score is not None:
+        return score
     if FORMA_STORICA_SEQUENZA_RE.search(testo) or " - " in testo or (
         "-" in testo and not QUOTA_DECIMALE_RE.search(testo)
     ):
-        score = _calcola_quanta_da_arrivi(testo)
-        if score is not None:
-            return score
+        return _calcola_quanta_da_arrivi(testo)
     if testo.isdigit():
         cifre = [int(c) for c in testo]
         if not cifre:
@@ -4484,7 +4569,7 @@ def _punteggio_ultimi_arrivi(valore: object) -> float | None:
     if ULTIMI_ARRIVO_LETTERALE_RE.fullmatch(testo):
         media = QUANTA_PENALITA_ARRIVO_LETTERALE
         return max(0.0, min(100.0, (10.0 - media) / 10.0 * 100.0))
-    return _calcola_quanta_da_arrivi(testo)
+    return None
 
 
 def _overround_lavagna_corsa(df: pd.DataFrame) -> float | None:
@@ -4587,24 +4672,33 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
                 is_favorito_assoluto = True
 
         rating = rating_numerici.loc[indice]
+        try:
+            if rating is None or pd.isna(rating):
+                rating_cell = riga.get("Rating")
+                rating = pd.to_numeric(rating_cell, errors="coerce")
+        except (TypeError, ValueError):
+            pass
         eta = _eta_anni(riga.get("Età"))
         quote = _parse_quote_valide_cella(riga.get("Quote Valide"))
         quota_max = _quota_massima_valida_riga(riga)
 
-        forma_txt = ""
-        for chiave_forma in ("Forma_Storica", "Ultimi Arrivi"):
+        storico = ""
+        for chiave_forma in ("Forma_Storica", "Ultimi Arrivi", "Forma Storica"):
             val_forma = riga.get(chiave_forma)
             try:
                 if val_forma is not None and pd.notna(val_forma):
                     cand = str(val_forma).strip()
-                    if cand and cand.lower() not in {"nan", "none", "<na>"}:
-                        forma_txt = cand
+                    if cand and cand.lower() not in {"nan", "none", "<na>", "n/d"}:
+                        storico = cand
                         break
             except (TypeError, ValueError):
                 continue
+        forma_txt = _normalizza_forma_storica(storico) or storico
         score_forma = _calcola_quanta_da_arrivi(forma_txt) if forma_txt else None
 
-        quanta = _punteggio_ultimi_arrivi(riga.get("Ultimi Arrivi"))
+        quanta = _punteggio_ultimi_arrivi(storico)
+        if quanta is None:
+            quanta = _punteggio_ultimi_arrivi(forma_txt)
         if quanta is None:
             quanta = score_forma
         if quanta is None:
@@ -4644,11 +4738,17 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
         else:
             spread_reg_quanta = None
 
-        # Modulo Elastico: priorità assoluta su anomalia Rating alto + quota alta.
+        # Modulo Elastico: priorità su anomalia Rating alto + quota alta;
+        # se manca il Rating ma c'è lo storico e quote ≥ 1.60, usa i moduli già calcolati.
         elastico = 0.0
         label_anomalia = "Assenza di dati"
         alert_elastico = False
-        if not pd.isna(rating) and quote:
+        rating_ok = False
+        try:
+            rating_ok = rating is not None and not pd.isna(rating)
+        except (TypeError, ValueError):
+            rating_ok = False
+        if rating_ok and quote:
             quota_media = statistics.mean(quote)
             rating_alto = (
                 rating_max is not None
@@ -4656,7 +4756,6 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
                 and float(rating) >= 0.75 * rating_max
             )
             if rating_alto and quota_media >= 5.0:
-                # Anomalia elastica positiva: Value Bet potenzialmente sotto-prezzata.
                 elastico = min(
                     100.0,
                     (float(rating) / max(rating_max, 1.0)) * 55.0
@@ -4669,6 +4768,14 @@ def calcola_value_bet(df: pd.DataFrame) -> pd.DataFrame:
                 label_anomalia = "Discrepanza lieve"
             else:
                 label_anomalia = "Nessuna anomalia"
+        elif quote and (regression is not None or quanta is not None):
+            quota_media = statistics.mean(quote)
+            if quota_media >= 1.60:
+                base_mod = float(
+                    quanta if quanta is not None else regression  # type: ignore[arg-type]
+                )
+                elastico = max(0.0, min(100.0, base_mod))
+                label_anomalia = "Discrepanza lieve"
         elif not quote:
             label_anomalia = "Assenza di quote valide ≥ 1.60"
 
