@@ -3091,6 +3091,96 @@ def _in_sequenza_forma_colonna(linee: list[str], indice: int) -> bool:
     return False
 
 
+_RATING_ETICHETTA_TESTO_RE = re.compile(
+    r"(?i)^\s*(?:rating|rtg|ratting|official[ \t]*rating|valutazione|or|rpr)\s*:?\s*$"
+)
+_RATING_INLINE_RE = re.compile(
+    r"(?i)\b(?:rating|rtg|ratting|official[ \t]*rating|valutazione|rpr|\bor)\b"
+    r"[ \t]*:?[ \t]*(?P<rating>\d{1,3}(?:[ \t]*[.,][ \t]*\d+)?)"
+)
+
+
+def _cattura_rating_da_righe_partente(righe: list[str]) -> float | None:
+    """Rating reale nel blocco cavallo; assente → None (niente valori inventati)."""
+    for indice, riga in enumerate(righe):
+        if re.search(r"(?i)\bkg\b", riga):
+            continue
+        match = _RATING_INLINE_RE.search(riga) or RATING_RE.search(riga)
+        if match is not None:
+            try:
+                valore = float(match.group("rating").replace(",", ".").replace(" ", ""))
+            except (TypeError, ValueError):
+                valore = None
+            if valore is not None and 1.0 <= valore <= 200.0:
+                return valore
+        if _linea_etichetta_rating(riga) or _RATING_ETICHETTA_TESTO_RE.match(riga):
+            if indice + 1 < len(righe):
+                nxt = righe[indice + 1].strip().replace(",", ".")
+                if re.fullmatch(r"\d{1,3}(?:\.\d+)?", nxt):
+                    valore = float(nxt)
+                    if 1.0 <= valore <= 200.0:
+                        return valore
+    return None
+
+
+def _cattura_storico_da_righe_partente(righe: list[str]) -> str:
+    """Storico 1-2-1 / 1p 2p / X-X-1 / colonna piazzamenti; ignora Kg e fantino."""
+    for indice, riga in enumerate(righe):
+        if not riga or re.search(r"(?i)\bkg\b", riga):
+            continue
+        if _linea_etichetta_ultimi(riga) or ULTIMI_ARRIVI_ETICHETTA_RE.search(riga):
+            resto = riga.split(":", 1)[-1].strip() if ":" in riga else ""
+            if resto.lower().startswith("ultimi") or resto.lower() in {
+                "forma",
+                "forma storica",
+                "",
+            }:
+                resto = ""
+            if resto:
+                forma = _normalizza_forma_storica(resto)
+                if forma:
+                    return forma
+            verticale = _raccogli_forma_saltando_kg(righe, indice + 1)
+            if verticale:
+                return verticale
+            continue
+        forma = _normalizza_forma_storica(riga)
+        if forma:
+            return forma
+    return _raccogli_forma_saltando_kg(righe, 0)
+
+
+def _raccogli_forma_saltando_kg(linee: list[str], inizio: int) -> str:
+    """Come la colonna verticale, ma le righe Kg non interrompono la scansione."""
+    pezzi: list[str] = []
+    for j in range(max(0, inizio), len(linee)):
+        t = linee[j].strip()
+        if not t or re.search(r"(?i)\bkg\b", t):
+            continue
+        if QUOTA_DECIMALE_RE.search(t) and _token_forma_colonna(t) is None:
+            if pezzi:
+                break
+            continue
+        if RATING_RE.search(t) or re.search(r"(?i)\bmetri\b", t):
+            continue
+        inline = _normalizza_forma_storica(t)
+        if inline:
+            return inline
+        tok = _token_forma_colonna(t)
+        if tok is not None:
+            pezzi.append(tok)
+            continue
+        if _riga_solo_trattino_separatore(t):
+            continue
+        if pezzi:
+            break
+    if len(pezzi) >= 2:
+        return " - ".join(pezzi)
+    if len(pezzi) == 1 and pezzi[0].isdigit() and len(pezzi[0]) >= 3:
+        return pezzi[0]
+    return ""
+
+
 def _inizia_blocco_cavallo(linee: list[str], indice: int) -> bool:
     numero = _linea_numero_partente(linee[indice])
     if numero is None:
@@ -3165,35 +3255,16 @@ def _parse_partenti_ancora_silks(testo: str) -> list[dict[str, object]]:
                         continue
                     if "kg" in basso:
                         continue
-                    if _linea_etichetta_rating(riga) and rating is None:
-                        rating = _rating_da_linea(riga)
-                        continue
-                    if _linea_etichetta_ultimi(riga) and not ultimi:
-                        resto = riga.split(":", 1)[-1].strip() if ":" in riga else ""
-                        if resto.lower().startswith("ultimi") or resto.lower() in {
-                            "forma",
-                            "forma storica",
-                            "",
-                        }:
-                            resto = ""
-                        ultimi = _normalizza_forma_storica(resto) if resto else ""
-                        continue
-                    if not ultimi:
-                        forma_riga = _normalizza_forma_storica(riga)
-                        if forma_riga and (
-                            " - " in forma_riga
-                            or (forma_riga.isdigit() and len(forma_riga) >= 3)
-                        ):
-                            ultimi = forma_riga
-                            continue
                     q = _linea_quota_decimale(riga)
                     if q is not None and q >= SOGLIA_QUOTA_VINCENTE_SIGMA:
                         if len(quote) < MAX_QUOTE_MERCATO_UTILI:
                             quote.append(q)
-                if not ultimi:
-                    ultimi = _raccogli_forma_verticale(pulite, corpo_da, fine)
-                if not ultimi:
-                    ultimi = _estrai_forma_storica_da_righe(blocco, 0)
+            ultimi = _cattura_storico_da_righe_partente(blocco)
+            if not ultimi:
+                ultimi = _estrai_forma_storica_da_righe(blocco, 0)
+            rating = _cattura_rating_da_righe_partente(blocco)
+            if rating is None:
+                rating = _estrai_rating_blocco("\n".join(blocco))
 
             lista.append(
                 {
