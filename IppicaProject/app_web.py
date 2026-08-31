@@ -178,7 +178,7 @@ FORMA_SPAZI_P_RE = re.compile(
 FORMA_COMPATTA_RE = re.compile(r"^(?P<compact>\d{3,6})$")
 QUOTA_DECIMALE_RE = re.compile(r"(?<![\d.,])\d+[ \t]*[.,][ \t]*\d{1,2}(?![\d])")
 ULTIMI_ARRIVI_ETICHETTA_RE = re.compile(
-    r"(?i)(?:ultimi[ \t]+arrivi|ultime[ \t]+uscite|\bforma(?:[ \t]+storica)?\b)"
+    r"(?i)(?:ultimi[ \t]+arrivi|ultime[ \t]+uscite|forma[ \t]+storica)"
 )
 DICITURA_RITIRO_PARTENTE_RE = re.compile(
     r"(?i)(?:\bnon[ \t]+partente\b|\britirat[oa]\b)"
@@ -1847,8 +1847,15 @@ def _parse_ultimi_arrivi_da_riga(
     inline = ULTIMI_ARRIVI_RE.search(riga)
     if inline is not None:
         ultimi = _normalizza_testo_ultimi_arrivi(inline.group("ultimi"))
+        if not _normalizza_forma_storica(ultimi):
+            colonna = _raccogli_forma_verticale(righe, indice + 1)
+            if colonna:
+                ultimi = colonna
         return ultimi, indice + 1
     if RIGA_ULTIMI_ARRIVI_ESATTA_RE.fullmatch(riga):
+        colonna = _raccogli_forma_verticale(righe, indice + 1)
+        if colonna:
+            return colonna, indice + 1
         if indice + 1 < len(righe):
             ultimi = _normalizza_testo_ultimi_arrivi(righe[indice + 1])
             return ultimi, indice + 2
@@ -1925,6 +1932,71 @@ def _estrai_ultimi_arrivi_e_linee_quote(blocco: str) -> tuple[str, list[str]]:
             return ultimi, linee[candidato + 1 :]
         return "", linee[indice + 1 :]
     return "", []
+
+
+def _token_forma_colonna(testo: str) -> str | None:
+    t = testo.strip()
+    if not t or t in {"-", "–", "—"}:
+        return None
+    if re.fullmatch(r"\d{1,2}[pP]", t):
+        return t[:-1]
+    if re.fullmatch(r"\d{1,2}", t):
+        return t
+    if re.fullmatch(r"(?i)(?:FE|NP|PU|UR|SU|BD|RR|CO|RO|X|[A-Z]{1,3})", t):
+        return t.upper()
+    return None
+
+
+def _raccogli_forma_verticale(linee: list[str], inizio: int, fine: int | None = None) -> str:
+    """Ricompone storico in colonna: 1 / - / 2 / - / FE (nessun dato inventato)."""
+    limite = len(linee) if fine is None else min(fine, len(linee))
+    pezzi: list[str] = []
+    for j in range(max(0, inizio), limite):
+        t = linee[j].strip()
+        if not t:
+            continue
+        if QUOTA_DECIMALE_RE.search(t) and _token_forma_colonna(t) is None:
+            break
+        if RATING_RE.search(t) or re.search(r"(?i)\bmetri\b", t):
+            continue
+        if _riga_esclude_peso_kg(t):
+            break
+        inline = _normalizza_forma_storica(t)
+        if inline and (" - " in inline or (inline.isdigit() and len(inline) >= 3)):
+            return inline
+        tok = _token_forma_colonna(t)
+        if tok is not None:
+            pezzi.append(tok)
+            continue
+        if _riga_solo_trattino_separatore(t):
+            continue
+        if pezzi:
+            break
+    if len(pezzi) >= 2:
+        return " - ".join(pezzi)
+    if len(pezzi) == 1 and pezzi[0].isdigit() and len(pezzi[0]) >= 3:
+        return pezzi[0]
+    return ""
+
+
+def _nome_da_riga_con_yo(riga: str) -> str | None:
+    """Nome sulla stessa riga dell'età (es. CITY RIVER | Femmina | 3YO)."""
+    testo = str(riga or "").strip()
+    if not testo or AGE_RE.search(testo) is None:
+        return None
+    taglio = re.sub(
+        r"(?i)[|¦]?\s*(Femmina|Maschio|Castrone|Intero|Gelding|Mare)\s*[|¦]?\s*\d{1,2}[ \t]*YO.*$",
+        "",
+        testo,
+    )
+    taglio = AGE_RE.sub("", taglio)
+    taglio = re.sub(r"[|¦]+", " ", taglio)
+    taglio = " ".join(taglio.split()).strip(" .-:\t")
+    if len(taglio) < 2 or not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}", taglio):
+        return None
+    if _riga_esclusa_come_nome(taglio):
+        return None
+    return taglio
 
 
 def _token_forma_a_pezzo(token: str) -> str:
@@ -2033,6 +2105,9 @@ def _estrai_forma_storica_da_righe(
                 forma = _normalizza_forma_storica(inline.group("ultimi"))
                 if forma:
                     return forma
+            verticale = _raccogli_forma_verticale(lines, indice + 1, limite)
+            if verticale:
+                return verticale
             for succ in range(indice + 1, min(indice + 8, limite)):
                 cand = lines[succ].strip()
                 if not cand:
@@ -2529,6 +2604,9 @@ def _indice_yo_precedente(indici_yo: list[int], posizione: int) -> int:
 
 
 def _nome_cavallo_index_scan_yo(righe: list[str], indice_yo: int, indice_yo_prec: int) -> str:
+    inline = _nome_da_riga_con_yo(righe[indice_yo])
+    if inline:
+        return inline
     limite = indice_yo_prec + 1 if indice_yo_prec >= 0 else 0
     for j in range(indice_yo - 1, limite - 1, -1):
         if _riga_firma_yo_cavallo(righe[j]):
@@ -2536,7 +2614,9 @@ def _nome_cavallo_index_scan_yo(righe: list[str], indice_yo: int, indice_yo_prec
         candidato = righe[j]
         if _riga_scoria_nome_index_scan_yo(candidato):
             continue
-        return candidato
+        nome = _estrai_nome_cavallo_da_riga(candidato) or candidato.strip()
+        if nome:
+            return nome
     return ""
 
 
@@ -2620,14 +2700,13 @@ def _parse_partenti_index_scan_yo(testo: str) -> list[dict[str, object]]:
                 parsed = _parse_ultimi_arrivi_da_riga(righe, cursore)
                 if parsed is not None:
                     ultimi, cursore = parsed
-                    step = "Quote Valide"
-                    quote = _raccogli_quote_partente_da_righe(
-                        righe, cursore, limite_avanti
-                    )
                     break
                 cursore += 1
 
             step = "Quote Valide"
+            quote = _raccogli_quote_partente_da_righe(
+                righe, indice_yo + 1, limite_avanti
+            )
             if not quote:
                 continue
 
@@ -3261,27 +3340,43 @@ def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
             _segnala_errore_parsing("Nome Cavallo", num_p, str(nome_p), exc)
             continue
 
-    if righe_condivise:
+    df_blindato = _dataframe_dati_gara_vuoto()
+    try:
+        df_blindato = _dataframe_partenti_orizzontale(testo_originale)
+    except Exception as exc:
+        prima = testo_originale.splitlines()[0] if testo_originale else ""
+        _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+
+    def _righe_con_nome(df: pd.DataFrame) -> bool:
+        if df is None or getattr(df, "empty", True) or "Nome" not in df.columns:
+            return False
+        return bool(
+            df["Nome"]
+            .astype(str)
+            .str.contains(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}", regex=True, na=False)
+            .any()
+        )
+
+    if not _righe_con_nome(df_blindato) and righe_condivise:
         df_blindato = pd.DataFrame(righe_condivise)
-    else:
-        df_blindato = _dataframe_dati_gara_vuoto()
+    if not _righe_con_nome(df_blindato):
         try:
-            df_blindato = _dataframe_partenti_orizzontale(testo_originale)
+            df_vert = _dataframe_partenti_verticali_standard(testo_originale)
         except Exception as exc:
             prima = testo_originale.splitlines()[0] if testo_originale else ""
             _segnala_errore_parsing("Dati partenti", 1, prima, exc)
-        if df_blindato.empty:
-            try:
-                df_blindato = _dataframe_partenti_verticali_standard(testo_originale)
-            except Exception as exc:
-                prima = testo_originale.splitlines()[0] if testo_originale else ""
-                _segnala_errore_parsing("Dati partenti", 1, prima, exc)
-        if df_blindato.empty:
-            try:
-                df_blindato = estrai_dati(testo_originale)
-            except Exception as exc:
-                prima = testo_originale.splitlines()[0] if testo_originale else ""
-                _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+            df_vert = _dataframe_dati_gara_vuoto()
+        if _righe_con_nome(df_vert):
+            df_blindato = df_vert
+    if not _righe_con_nome(df_blindato):
+        try:
+            df_fb = estrai_dati(testo_originale)
+        except Exception as exc:
+            prima = testo_originale.splitlines()[0] if testo_originale else ""
+            _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+            df_fb = _dataframe_dati_gara_vuoto()
+        if _righe_con_nome(df_fb):
+            df_blindato = df_fb
 
     if df_blindato is None or getattr(df_blindato, "empty", True):
         return _dataframe_dati_gara_vuoto()
