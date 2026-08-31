@@ -1246,7 +1246,9 @@ def _normalizza_dataframe_partenti(df: pd.DataFrame) -> pd.DataFrame:
         def _nome_standard(valore: object, numero_riga: object) -> str:
             testo = str(valore or "").strip()
             if not testo:
-                return testo
+                return ""
+            if testo.lower() in {"none", "nan", "<na>", "n/d"}:
+                return ""
             
             # Se la stringa contiene già il formato col numero, puliscila ed esci
             if " - " in testo:
@@ -2986,6 +2988,212 @@ def _parse_partenti_da_blocchi(testo: str) -> list[dict[str, object]]:
     return lista
 
 
+def _linea_quota_decimale(testo: str) -> float | None:
+    t = testo.strip().replace(",", ".")
+    if "." not in t:
+        return None
+    try:
+        valore = float(t)
+    except ValueError:
+        return None
+    if 1.01 <= valore <= 500.0:
+        return valore
+    return None
+
+
+def _linea_numero_partente(testo: str) -> int | None:
+    t = testo.strip()
+    if t.isdigit() and 1 <= int(t) <= 40:
+        return int(t)
+    return None
+
+
+def _linea_gabbia(testo: str) -> bool:
+    t = testo.strip().upper().replace(" ", "")
+    return t.startswith("G") and t[1:].isdigit()
+
+
+def _linea_etichetta_ultimi(testo: str) -> bool:
+    t = testo.strip().lower()
+    return (
+        "ultimi arrivi" in t
+        or "ultime uscite" in t
+        or t == "forma"
+        or t.startswith("forma storica")
+    )
+
+
+def _linea_etichetta_rating(testo: str) -> bool:
+    t = testo.strip().lower()
+    return t.startswith("rating") or t.startswith("rtg") or t.startswith("ratting")
+
+
+def _rating_da_linea(testo: str) -> float | None:
+    pezzi = testo.replace(",", ".").replace(":", " ").split()
+    for pezzo in reversed(pezzi):
+        try:
+            valore = float(pezzo)
+        except ValueError:
+            continue
+        if 1.0 <= valore <= 200.0:
+            return valore
+    return None
+
+
+def _linea_sembra_nome_cavallo(testo: str) -> bool:
+    t = testo.strip()
+    if not t:
+        return False
+    if _linea_numero_partente(t) is not None:
+        return False
+    if _linea_gabbia(t) or _linea_quota_decimale(t) is not None:
+        return False
+    if t.lower() in {"silks", "silk"}:
+        return False
+    if _linea_etichetta_ultimi(t) or _linea_etichetta_rating(t):
+        return False
+    if "kg" in t.lower() or "metri" in t.lower():
+        return False
+    if t in {"-", "–", "—"}:
+        return False
+    if "YO" in t.upper():
+        inline = _nome_da_riga_con_yo(t)
+        return bool(inline)
+    lettere = sum(1 for c in t if c.isalpha())
+    return lettere >= 2
+
+
+def _indice_prossima_non_vuota(linee: list[str], inizio: int) -> int:
+    i = inizio
+    while i < len(linee) and not linee[i].strip():
+        i += 1
+    return i
+
+
+def _in_sequenza_forma_colonna(linee: list[str], indice: int) -> bool:
+    if indice > 0 and linee[indice - 1].strip() in {"-", "–", "—"}:
+        return True
+    if indice + 1 < len(linee) and linee[indice + 1].strip() in {"-", "–", "—"}:
+        return True
+    return False
+
+
+def _inizia_blocco_cavallo(linee: list[str], indice: int) -> bool:
+    numero = _linea_numero_partente(linee[indice])
+    if numero is None:
+        return False
+    if _in_sequenza_forma_colonna(linee, indice):
+        return False
+    nxt = _indice_prossima_non_vuota(linee, indice + 1)
+    if nxt >= len(linee):
+        return False
+    return _linea_gabbia(linee[nxt]) or _linea_sembra_nome_cavallo(linee[nxt])
+
+
+def _parse_partenti_per_indici(testo: str) -> list[dict[str, object]]:
+    """
+    Estrazione a indici (splitlines), senza regex di blocco.
+    N° → gabbia opzionale → nome → età/YO → rating → ultimi arrivi → quote.
+    """
+    linee = [ln.rstrip() for ln in str(testo or "").splitlines()]
+    if not linee:
+        return []
+    lista: list[dict[str, object]] = []
+    i = 0
+    while i < len(linee):
+        if not _inizia_blocco_cavallo(linee, i):
+            i += 1
+            continue
+        numero = _linea_numero_partente(linee[i])
+        assert numero is not None
+        j = _indice_prossima_non_vuota(linee, i + 1)
+        if j < len(linee) and _linea_gabbia(linee[j]):
+            j = _indice_prossima_non_vuota(linee, j + 1)
+        if j < len(linee) and linee[j].strip().lower() in {"silks", "silk"}:
+            j = _indice_prossima_non_vuota(linee, j + 1)
+        if j >= len(linee) or not _linea_sembra_nome_cavallo(linee[j]):
+            i += 1
+            continue
+        riga_nome = linee[j].strip()
+        nome = _nome_da_riga_con_yo(riga_nome) or riga_nome
+        nome = " ".join(nome.split()).strip(" |")
+        if nome.lower() in {"none", "nan"}:
+            i += 1
+            continue
+        k = j + 1
+        fine = len(linee)
+        for cand in range(k, len(linee)):
+            if cand != i and _inizia_blocco_cavallo(linee, cand):
+                fine = cand
+                break
+        blocco_linee = linee[i:fine]
+        eta = ""
+        for riga in blocco_linee:
+            if "YO" in riga.upper():
+                eta = _eta_normalizzata(AGE_RE.search(riga))
+                if eta:
+                    break
+        rating = None
+        for riga in blocco_linee:
+            if _linea_etichetta_rating(riga):
+                rating = _rating_da_linea(riga)
+                if rating is None:
+                    idx = blocco_linee.index(riga)
+                    if idx + 1 < len(blocco_linee):
+                        rating = _rating_da_linea(blocco_linee[idx + 1])
+                break
+        ultimi = ""
+        for idx_u, riga in enumerate(blocco_linee):
+            if not _linea_etichetta_ultimi(riga):
+                continue
+            resto = riga.split(":", 1)[-1].strip() if ":" in riga else ""
+            if resto.lower() in {"ultimi arrivi", "ultime uscite", "forma storica", ""}:
+                resto = ""
+            if resto.lower().startswith("ultimi"):
+                resto = ""
+            ultimi = _normalizza_forma_storica(resto) if resto else ""
+            if not ultimi:
+                ultimi = _raccogli_forma_verticale(blocco_linee, idx_u + 1)
+            if not ultimi and resto:
+                ultimi = _normalizza_forma_storica(resto) or resto
+            break
+        if not ultimi:
+            ultimi = _estrai_forma_storica_da_righe(blocco_linee, 0)
+        quote: list[float] = []
+        for riga in blocco_linee:
+            if "kg" in riga.lower():
+                continue
+            q = _linea_quota_decimale(riga)
+            if q is None:
+                continue
+            if q >= SOGLIA_QUOTA_VINCENTE_SIGMA:
+                quote.append(q)
+            if len(quote) >= MAX_QUOTE_MERCATO_UTILI:
+                break
+        if not quote:
+            i = fine if fine > i else i + 1
+            continue
+        ritirato = any(
+            "non partente" in r.lower() or "ritirat" in r.lower()
+            for r in blocco_linee
+        )
+        if not ritirato:
+            lista.append(
+                {
+                    "numero": numero,
+                    "nome": nome,
+                    "ultimi_arrivi": ultimi,
+                    "forma_storica": ultimi,
+                    "quote_valide": quote,
+                    "blocco": "\n".join(blocco_linee),
+                    "eta": eta,
+                    "rating": rating,
+                }
+            )
+        i = fine if fine > i else i + 1
+    return lista
+
+
 def _estrai_partenti_verticali(testo: str) -> pd.DataFrame:
     lines = [line.strip() for line in testo.splitlines() if line.strip()]
     cavalli = []
@@ -3189,9 +3397,25 @@ def _record_da_macchina_stati(record: dict[str, object]) -> dict[str, object]:
         forma_storica = _normalizza_forma_storica(forma_storica) or forma_storica
     if (not forma_storica or forma_storica.lower() in {"nan", "none"}) and blocco:
         forma_storica = _estrai_forma_storica_da_righe(blocco.splitlines(), 0)
+    numero_val = record.get("numero")
+    nome_val = str(record.get("nome") or "").strip()
+    if nome_val.lower() in {"none", "nan", "<na>"}:
+        nome_val = ""
+    try:
+        numero_int = int(numero_val) if numero_val is not None and str(numero_val).strip() not in {"", "None", "nan"} else None
+    except (TypeError, ValueError):
+        numero_int = None
+    if numero_int is not None and nome_val:
+        etichetta_nome = f"{numero_int} - {nome_val}"
+    elif nome_val:
+        etichetta_nome = nome_val
+    elif numero_int is not None:
+        etichetta_nome = str(numero_int)
+    else:
+        etichetta_nome = ""
     return {
-        "N°": record.get("numero"),
-        "Nome": f"{record.get('numero')} - {record.get('nome')}",
+        "N°": numero_int,
+        "Nome": etichetta_nome,
         "Età": str(record.get("eta") or ""),
         "Rating": rating if rating is not None else pd.NA,
         "Ultimi Arrivi": forma_storica,
@@ -3211,6 +3435,7 @@ def _dataframe_partenti_orizzontale(testo: str) -> pd.DataFrame:
 
     records: list[dict[str, object]] = []
     for parser in (
+        _parse_partenti_per_indici,
         _parse_partenti_index_scan_yo,
         _parse_partenti_macchina_stati,
         _parse_partenti_da_blocchi,
@@ -3321,44 +3546,46 @@ def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
     if not testo_originale:
         return _dataframe_dati_gara_vuoto()
 
-    righe_condivise: list[dict[str, object]] = []
-    partenti_condivisi: list[object] = []
-    try:
-        partenti_condivisi = list(parse_partenti_testo_grezzo(testo_originale))
-    except Exception as exc:
-        prima = testo_originale.splitlines()[0] if testo_originale else ""
-        _segnala_errore_parsing("Dati partenti", 1, prima, exc)
-        partenti_condivisi = []
-
-    for partente in partenti_condivisi:
-        try:
-            record = partente_grezzo_a_record_dict(partente)
-            righe_condivise.append(_record_da_macchina_stati(record))
-        except Exception as exc:
-            nome_p = getattr(partente, "nome", "")
-            num_p = getattr(partente, "numero", None)
-            _segnala_errore_parsing("Nome Cavallo", num_p, str(nome_p), exc)
-            continue
-
     df_blindato = _dataframe_dati_gara_vuoto()
     try:
-        df_blindato = _dataframe_partenti_orizzontale(testo_originale)
+        records_idx = _parse_partenti_per_indici(testo_originale)
+        if records_idx:
+            righe_idx = [_record_da_macchina_stati(r) for r in records_idx]
+            df_blindato = pd.DataFrame(righe_idx)
     except Exception as exc:
         prima = testo_originale.splitlines()[0] if testo_originale else ""
-        _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+        _segnala_errore_parsing("Nome Cavallo", 1, prima, exc)
 
     def _righe_con_nome(df: pd.DataFrame) -> bool:
         if df is None or getattr(df, "empty", True) or "Nome" not in df.columns:
             return False
+        testi = df["Nome"].astype(str)
         return bool(
-            df["Nome"]
-            .astype(str)
-            .str.contains(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}", regex=True, na=False)
-            .any()
+            testi.str.contains(r"[A-Za-zÀ-ÖØ-öø-ÿ]{2,}", regex=True, na=False).any()
+            and (~testi.str.lower().isin(["none", "nan", "none - none"])).any()
         )
 
-    if not _righe_con_nome(df_blindato) and righe_condivise:
-        df_blindato = pd.DataFrame(righe_condivise)
+    if not _righe_con_nome(df_blindato):
+        try:
+            df_blindato = _dataframe_partenti_orizzontale(testo_originale)
+        except Exception as exc:
+            prima = testo_originale.splitlines()[0] if testo_originale else ""
+            _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+
+    if not _righe_con_nome(df_blindato):
+        righe_condivise: list[dict[str, object]] = []
+        try:
+            for partente in parse_partenti_testo_grezzo(testo_originale):
+                record = partente_grezzo_a_record_dict(partente)
+                if not str(record.get("nome") or "").strip():
+                    continue
+                righe_condivise.append(_record_da_macchina_stati(record))
+        except Exception as exc:
+            prima = testo_originale.splitlines()[0] if testo_originale else ""
+            _segnala_errore_parsing("Dati partenti", 1, prima, exc)
+        if righe_condivise:
+            df_blindato = pd.DataFrame(righe_condivise)
+
     if not _righe_con_nome(df_blindato):
         try:
             df_vert = _dataframe_partenti_verticali_standard(testo_originale)
@@ -3368,15 +3595,6 @@ def parse_dati_gara_grezzi(testo: str) -> pd.DataFrame:
             df_vert = _dataframe_dati_gara_vuoto()
         if _righe_con_nome(df_vert):
             df_blindato = df_vert
-    if not _righe_con_nome(df_blindato):
-        try:
-            df_fb = estrai_dati(testo_originale)
-        except Exception as exc:
-            prima = testo_originale.splitlines()[0] if testo_originale else ""
-            _segnala_errore_parsing("Dati partenti", 1, prima, exc)
-            df_fb = _dataframe_dati_gara_vuoto()
-        if _righe_con_nome(df_fb):
-            df_blindato = df_fb
 
     if df_blindato is None or getattr(df_blindato, "empty", True):
         return _dataframe_dati_gara_vuoto()
